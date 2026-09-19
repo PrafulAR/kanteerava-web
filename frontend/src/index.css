@@ -1,0 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap');
+@import 'tailwindcss';
+
+:root {
+  font-family: Georgia, serif; color: #172635; background: #f6f2e9; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
+  --wing-navy: #1e3a5f; --wing-navy-dark: #142a46; --wing-navy-tint: #e8eef4;
+  --wing-green: #2f5d3a; --wing-green-dark: #21442a; --wing-green-tint: #e8f0e9;
+  --wing-red: #843434; --wing-red-dark: #632525; --wing-red-tint: #f3e9e7;
+  --wing-gold: #9a7418; --wing-gold-dark: #715311; --wing-gold-tint: #f5efdf;
+  --radius-editorial: 12px;
+}
+* { box-sizing: border-box; } body { margin: 0; min-width: 320px; } button, input, select, textarea { font: inherit; } button, a { -webkit-tap-highlight-color: transparent; }

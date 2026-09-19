@@ -1,0 +1,200 @@
+from rest_framework import status
+from django.utils import timezone
+from django.http import HttpResponse
+import logging
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from events.models import Event
+
+from .models import Membership
+from .serializers import MembershipSerializer
+from .services import MembershipService
+
+logger = logging.getLogger(__name__)
+
+
+def is_admin(user):
+    return user.is_superuser or user.role == 'ADMIN'
+
+
+class AdminDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_admin(request.user):
+            return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'success': True, 'message': 'Admin dashboard loaded.', 'data': {
+            'total_members': Membership.objects.filter(status=Membership.Status.APPROVED).count(),
+            'total_scouts': Membership.objects.filter(member_type=Membership.MemberType.SCOUT, status=Membership.Status.APPROVED).count(),
+            'total_guides': Membership.objects.filter(member_type=Membership.MemberType.GUIDE, status=Membership.Status.APPROVED).count(),
+            'total_cubs': Membership.objects.filter(member_type=Membership.MemberType.CUB, status=Membership.Status.APPROVED).count(),
+            'total_bulbuls': Membership.objects.filter(member_type=Membership.MemberType.BULBUL, status=Membership.Status.APPROVED).count(),
+            'total_rovers': Membership.objects.filter(member_type=Membership.MemberType.ROVER, status=Membership.Status.APPROVED).count(),
+            'total_rangers': Membership.objects.filter(member_type=Membership.MemberType.RANGER, status=Membership.Status.APPROVED).count(),
+            'total_alumni': Membership.objects.filter(member_type=Membership.MemberType.ALUMNI, status=Membership.Status.APPROVED).count(),
+            'total_leaders': Membership.objects.filter(member_type=Membership.MemberType.LEADER, status=Membership.Status.APPROVED).count(),
+            'pending_applications': Membership.objects.filter(status=Membership.Status.PENDING).count(),
+            'upcoming_events': Event.objects.filter(end_date__gte=timezone.now(), is_published=True).count(),
+        }})
+
+
+class MemberDirectoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_admin(request.user):
+            return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        counts = {
+            member_type: Membership.objects.filter(member_type=member_type, status=Membership.Status.APPROVED).count()
+            for member_type, _ in Membership.MemberType.choices
+        }
+        return Response({'success': True, 'message': 'Member directory loaded.', 'data': {'counts': counts}})
+
+
+class WingMemberListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, member_type):
+        if not is_admin(request.user):
+            return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        wing = member_type.upper()
+        if wing not in Membership.MemberType.values:
+            return Response({'success': False, 'message': 'Invalid member wing.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        members = list(Membership.objects.filter(member_type=wing, status=Membership.Status.APPROVED))
+        search = request.query_params.get('search', '').strip().casefold()
+        if search:
+            members = [member for member in members if search in ' '.join([
+                member.user.full_name or '',
+                member.scout_id or member.application_id or '',
+                member.user.email or '',
+                member.user.phone or '',
+            ]).casefold()]
+        return Response({'success': True, 'message': 'Wing members loaded.', 'data': MembershipSerializer(members, many=True).data})
+
+
+class DirectoryMemberDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, member_type, membership_id):
+        if not is_admin(request.user):
+            return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        wing = member_type.upper()
+        if wing not in Membership.MemberType.values:
+            return Response({'success': False, 'message': 'Invalid member wing.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            member = Membership.objects.get(pk=membership_id, member_type=wing, status=Membership.Status.APPROVED)
+        except Membership.DoesNotExist:
+            return Response({'success': False, 'message': 'Active member not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'success': True, 'message': 'Member details loaded.', 'data': MembershipSerializer(member).data})
+
+
+class MembershipApplyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = MembershipSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            membership = MembershipService.submit(user=request.user, validated_data=serializer.validated_data)
+        except ValueError as error:
+            return Response({'success': False, 'message': str(error), 'errors': {}}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': True, 'message': 'Membership application submitted.', 'data': MembershipSerializer(membership).data}, status=status.HTTP_201_CREATED)
+
+
+class MembershipListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        memberships = Membership.objects.all() if is_admin(request.user) else Membership.objects.filter(user=request.user)
+        return Response({'success': True, 'message': 'Memberships loaded.', 'data': MembershipSerializer(memberships, many=True).data})
+
+
+class MembershipDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, membership_id):
+        try:
+            membership = Membership.objects.get(pk=membership_id)
+        except Membership.DoesNotExist:
+            return Response({'success': False, 'message': 'Membership not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        if not is_admin(request.user) and membership.user != request.user:
+            return Response({'success': False, 'message': 'You do not have permission to view this membership.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'success': True, 'message': 'Membership loaded.', 'data': MembershipSerializer(membership).data})
+
+    def patch(self, request, membership_id):
+        try:
+            membership = Membership.objects.get(pk=membership_id)
+        except Membership.DoesNotExist:
+            return Response({'success': False, 'message': 'Membership not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        if not is_admin(request.user):
+            allowed = {'applicant_signature_upload', 'applicant_signature_name', 'photo_upload', 'photo_name'}
+            if membership.user != request.user or set(request.data) - allowed:
+                return Response({'success': False, 'message': 'You can update only your own pending signature or photo.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        elif {'applicant_signature_upload', 'applicant_signature_name'} & set(request.data):
+            return Response({'success': False, 'message': 'Only the applicant can provide their signature.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        serializer = MembershipSerializer(membership, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            updated = MembershipService.update_application(membership=membership, validated_data=serializer.validated_data)
+        except ValueError as error:
+            return Response({'success': False, 'message': str(error), 'errors': {}}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': True, 'message': 'Application details updated.', 'data': MembershipSerializer(updated).data})
+
+
+class MembershipPdfView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, membership_id):
+        try:
+            membership = Membership.objects.get(pk=membership_id)
+        except Membership.DoesNotExist:
+            return Response({'success': False, 'message': 'Membership not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        if not is_admin(request.user) and membership.user != request.user:
+            return Response({'success': False, 'message': 'You do not have permission to download this application.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        if membership.status != Membership.Status.APPROVED or membership.official_form_version != 1 or not membership.application_pdf:
+            return Response({'success': False, 'message': 'The official form is available only after approval.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        response = HttpResponse(bytes(membership.application_pdf), content_type='application/pdf')
+        disposition = 'attachment' if request.query_params.get('download') == '1' else 'inline'
+        response['Content-Disposition'] = f'{disposition}; filename="{membership.application_id}.pdf"'
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+
+class MembershipApproveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, membership_id):
+        if not is_admin(request.user):
+            return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            membership = Membership.objects.get(pk=membership_id)
+        except Membership.DoesNotExist:
+            return Response({'success': False, 'message': 'Membership not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            membership = MembershipService.approve(
+                membership=membership, admin=request.user,
+                signature_data=request.data.get('authorized_signature', ''),
+                signature_name=request.data.get('authorized_signature_name', ''),
+            )
+        except ValueError as error:
+            return Response({'success': False, 'message': str(error), 'errors': {}}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('Could not complete membership approval for %s', membership_id)
+            return Response({'success': False, 'message': 'Could not create and save the official form. Approval was not completed.', 'errors': {}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'success': True, 'message': 'Membership approved.', 'data': MembershipSerializer(membership).data})
+
+
+class MembershipRejectView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, membership_id):
+        if not is_admin(request.user):
+            return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        membership = Membership.objects.get(pk=membership_id)
+        try:
+            MembershipService.reject(membership=membership, admin=request.user, reason=request.data.get('rejection_reason', ''))
+        except ValueError as error:
+            return Response({'success': False, 'message': str(error), 'errors': {}}, status=status.HTTP_409_CONFLICT)
+        return Response({'success': True, 'message': 'Membership rejected.', 'data': MembershipSerializer(membership).data})
