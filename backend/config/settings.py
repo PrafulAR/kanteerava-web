@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import environ
 from datetime import timedelta
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,16 +25,43 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 env = environ.Env(
     DEBUG=(bool, True),
-    CORS_ALLOWED_ORIGINS=(list, ['http://localhost:5173']),
+    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
+    CORS_ALLOWED_ORIGINS=(list, ['http://localhost:5173', 'http://127.0.0.1:5173']),
+    CSRF_TRUSTED_ORIGINS=(list, []),
+    SECURE_SSL_REDIRECT=(bool, False),
+    SESSION_COOKIE_SECURE=(bool, False),
+    CSRF_COOKIE_SECURE=(bool, False),
+    SECURE_HSTS_SECONDS=(int, 0),
+    SECURE_HSTS_INCLUDE_SUBDOMAINS=(bool, False),
+    SECURE_HSTS_PRELOAD=(bool, False),
+    BREVO_API_TIMEOUT_SECONDS=(int, 10),
+    AUTH_OTP_EXPIRY_MINUTES=(int, 10),
+    AUTH_OTP_RESEND_COOLDOWN_SECONDS=(int, 45),
+    AUTH_OTP_MAX_ATTEMPTS=(int, 5),
+    AUTH_OTP_MAX_SENDS=(int, 5),
+    AUTH_PASSWORD_RESET_GRANT_MINUTES=(int, 10),
 )
 environ.Env.read_env(BASE_DIR / '.env')
 
-SECRET_KEY = env('SECRET_KEY', default='development-only-secret-key')
+SECRET_KEY = env(
+    'SECRET_KEY',
+    default='local-development-only-key-change-before-deployment-2026-xvk',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
+ALLOWED_HOSTS = env('ALLOWED_HOSTS')
+CSRF_TRUSTED_ORIGINS = env('CSRF_TRUSTED_ORIGINS')
+if not DEBUG and SECRET_KEY == 'local-development-only-key-change-before-deployment-2026-xvk':
+    raise ImproperlyConfigured('Set a unique SECRET_KEY before running with DEBUG=False.')
+
+SECURE_SSL_REDIRECT = env('SECURE_SSL_REDIRECT')
+SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE')
+CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE')
+SECURE_HSTS_SECONDS = env('SECURE_HSTS_SECONDS')
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env('SECURE_HSTS_INCLUDE_SUBDOMAINS')
+SECURE_HSTS_PRELOAD = env('SECURE_HSTS_PRELOAD')
 
 
 # Application definition
@@ -58,6 +86,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -91,11 +120,29 @@ DATABASES = {
 }
 
 CORS_ALLOWED_ORIGINS = env('CORS_ALLOWED_ORIGINS')
+if DEBUG:
+    # Vite may be opened through either local hostname. Keep both available in
+    # development even when an older local .env lists only one of them.
+    CORS_ALLOWED_ORIGINS = list(dict.fromkeys([
+        *CORS_ALLOWED_ORIGINS,
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ]))
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
-    'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication'],
+    'DEFAULT_AUTHENTICATION_CLASSES': ['accounts.authentication.VersionedJWTAuthentication'],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_ip': '100/hour',
+        'auth_registration': '5/hour',
+        'auth_login': '20/hour',
+        'auth_otp_verify': '30/hour',
+        'auth_otp_resend': '6/hour',
+        'auth_password_reset_request': '5/hour',
+        'auth_password_reset_complete': '10/hour',
+        'auth_google': '20/hour',
+    },
 }
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -146,13 +193,21 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django_mongodb_backend.fields.ObjectIdAutoField'
+DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
 
 
-# Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
+# Transactional authentication email (Brevo HTTPS API, never SMTP)
+BREVO_API_KEY = env('BREVO_API_KEY', default='')
+BREVO_FROM_EMAIL = env('BREVO_FROM_EMAIL', default='')
+BREVO_FROM_NAME = env('BREVO_FROM_NAME', default='XV Kanteerava')
+BREVO_API_TIMEOUT_SECONDS = env('BREVO_API_TIMEOUT_SECONDS')
 
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+AUTH_OTP_EXPIRY_MINUTES = env('AUTH_OTP_EXPIRY_MINUTES')
+AUTH_OTP_RESEND_COOLDOWN_SECONDS = env('AUTH_OTP_RESEND_COOLDOWN_SECONDS')
+AUTH_OTP_MAX_ATTEMPTS = env('AUTH_OTP_MAX_ATTEMPTS')
+AUTH_OTP_MAX_SENDS = env('AUTH_OTP_MAX_SENDS')
+AUTH_PASSWORD_RESET_GRANT_MINUTES = env('AUTH_PASSWORD_RESET_GRANT_MINUTES')
+
+# Google Identity Services uses a browser client ID. The backend verifies the
+# Google-issued credential against this audience; no client secret is needed.
+GOOGLE_OAUTH_CLIENT_ID = env('GOOGLE_OAUTH_CLIENT_ID', default='')

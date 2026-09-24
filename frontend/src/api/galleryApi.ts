@@ -4,6 +4,7 @@ export interface GalleryAlbum {
   id: string
   title: string
   description: string
+  category: 'DOMESTIC' | 'INTERNATIONAL'
   is_published: boolean
   photo_count: number
   cover_image: string | null
@@ -28,8 +29,8 @@ const backendOrigin = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000/ap
 export const galleryImageUrl = (image: string) => image.startsWith('http://') || image.startsWith('https://') ? image : `${backendOrigin}${image}`
 
 export const getGalleryAlbums = () => apiClient.get<{ data: GalleryAlbum[] }>('/gallery/albums/')
-export const createGalleryAlbum = (payload: Pick<GalleryAlbum, 'title' | 'description' | 'is_published'>) => apiClient.post<{ data: GalleryAlbum }>('/gallery/albums/', payload)
-export const updateGalleryAlbum = (id: string, payload: Partial<Pick<GalleryAlbum, 'title' | 'description' | 'is_published'>>) => apiClient.patch<{ data: GalleryAlbum }>(`/gallery/albums/${id}/`, payload)
+export const createGalleryAlbum = (payload: Pick<GalleryAlbum, 'title' | 'description' | 'category' | 'is_published'>) => apiClient.post<{ data: GalleryAlbum }>('/gallery/albums/', payload)
+export const updateGalleryAlbum = (id: string, payload: Partial<Pick<GalleryAlbum, 'title' | 'description' | 'category' | 'is_published'>>) => apiClient.patch<{ data: GalleryAlbum }>(`/gallery/albums/${id}/`, payload)
 export const deleteGalleryAlbum = (id: string) => apiClient.delete(`/gallery/albums/${id}/`)
 export const getGalleryPhotos = (albumId: string) => apiClient.get<{ data: GalleryPhoto[] }>(`/gallery/albums/${albumId}/photos/`)
 export const uploadGalleryPhoto = (albumId: string, payload: FormData) => apiClient.post<{ data: GalleryPhoto }>(`/gallery/albums/${albumId}/photos/`, payload, { headers: { 'Content-Type': 'multipart/form-data' } })

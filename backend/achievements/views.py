@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from memberships.views import is_admin
+from api.utils import get_object_or_none
 from .models import Achievement
 from .serializers import AchievementSerializer, PublicAchievementSerializer
 
@@ -30,17 +31,18 @@ class AchievementDetailView(APIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     permission_classes = [IsAuthenticated]
 
-    def get_object(self, achievement_id): return Achievement.objects.get(pk=achievement_id)
+    def get_object(self, achievement_id): return get_object_or_none(Achievement, pk=achievement_id)
 
     def patch(self, request, achievement_id):
         if not is_admin(request.user): return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try: item = self.get_object(achievement_id)
-        except Achievement.DoesNotExist: return Response({'success': False, 'message': 'Achievement not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        item = self.get_object(achievement_id)
+        if item is None: return Response({'success': False, 'message': 'Achievement not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         serializer = AchievementSerializer(item, data=request.data, partial=True); serializer.is_valid(raise_exception=True)
         return Response({'success': True, 'message': 'Achievement updated.', 'data': AchievementSerializer(serializer.save()).data})
 
     def delete(self, request, achievement_id):
         if not is_admin(request.user): return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try: self.get_object(achievement_id).delete()
-        except Achievement.DoesNotExist: return Response({'success': False, 'message': 'Achievement not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        item = self.get_object(achievement_id)
+        if item is None: return Response({'success': False, 'message': 'Achievement not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        item.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

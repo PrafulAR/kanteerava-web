@@ -2,7 +2,7 @@
 
 import base64
 import re
-from datetime import date
+from datetime import date, timedelta
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -11,11 +11,12 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 from PIL import Image
 
-from .document import build_official_pdf
-from .models import Membership
+from .document import _membership_applicant_name, build_official_pdf
+from .models import Membership, RetiredApplicationNumber
+from .serializers import MembershipSerializer
 from .uploads import normalize_image_upload
 from .services import MembershipService
-from .views import MembershipPdfView
+from .views import MembershipDetailView, MembershipPdfView, MembershipRejectView, MembershipResourcesView
 from rest_framework.test import APIRequestFactory, force_authenticate
 from accounts.models import User
 
@@ -26,16 +27,23 @@ def signature_bytes():
     return output.getvalue()
 
 
+def photo_bytes():
+    output = BytesIO()
+    Image.new('RGB', (240, 320), 'white').save(output, 'JPEG')
+    return output.getvalue()
+
+
 def sample_membership(**overrides):
     values = dict(
         Status=Membership.Status, status=Membership.Status.APPROVED,
-        application_id='XVK_SCO_TEST', user=SimpleNamespace(full_name='Example Member', email='example@test.invalid', phone=''),
+        application_id='XVK_SCOUT_2026_12345', user=SimpleNamespace(full_name='Example Member', email='example@test.invalid', phone=''),
+        applicant_name='OFFICIAL APPLICANT NAME',
         parent_or_guardian='Example Guardian', date_of_birth=date(2004, 10, 13),
         address='Chamrajpet, Bengaluru', contact_phone='9000000000', emergency_contact_name='Example Guardian',
         emergency_contact_phone='9000000001', postal_code='560018', school_college='', grade_section='',
         hobbies='', introduced_by='', gender='', emergency_contact_relationship='', preferred_patrol='',
         previous_experience='', joining_date=None, submitted_at=timezone.now(), approved_at=timezone.now(),
-        applicant_signature=signature_bytes(), admin_signature=signature_bytes(), guardian_signature=None,
+        applicant_signature=signature_bytes(), admin_signature=signature_bytes(), guardian_signature=signature_bytes(),
         member_photo=None, get_member_type_display=lambda: 'Scout',
     )
     values.update(overrides)
@@ -43,6 +51,13 @@ def sample_membership(**overrides):
 
 
 class MembershipDocumentTests(SimpleTestCase):
+    def test_pdf_name_comes_from_the_membership_snapshot(self):
+        membership = sample_membership(
+            applicant_name='PRAFUL A R',
+            user=SimpleNamespace(full_name='Account Name', email='example@test.invalid', phone=''),
+        )
+        self.assertEqual(_membership_applicant_name(membership), 'PRAFUL A R')
+
     def test_normal_application_is_one_a4_page(self):
         pdf = build_official_pdf(sample_membership())
         self.assertTrue(pdf.startswith(b'%PDF-'))
@@ -53,9 +68,11 @@ class MembershipDocumentTests(SimpleTestCase):
         pdf = build_official_pdf(sample_membership(address='A very long residential address, ' * 75, hobbies='Camping, hiking and community service, ' * 65))
         self.assertGreaterEqual(len(re.findall(rb'/Type\s*/Page\b', pdf)), 2)
 
-    def test_both_signatures_are_required(self):
+    def test_all_three_signatures_are_required(self):
         with self.assertRaisesRegex(ValueError, 'signatures are required'):
             build_official_pdf(sample_membership(admin_signature=None))
+        with self.assertRaisesRegex(ValueError, 'signatures are required'):
+            build_official_pdf(sample_membership(guardian_signature=None))
 
 
 class PrivateImageValidationTests(SimpleTestCase):
@@ -75,6 +92,122 @@ class PrivateImageValidationTests(SimpleTestCase):
         encoded = base64.b64encode(output.getvalue()).decode('ascii')
         with self.assertRaisesRegex(ValueError, 'wider than they are tall'):
             normalize_image_upload(f'data:image/jpeg;base64,{encoded}', 'portrait.jpg', kind='signature')
+
+
+class MembershipApplicationValidationTests(SimpleTestCase):
+    def valid_payload(self):
+        return {
+            'applicant_name': 'OFFICIAL APPLICANT NAME',
+            'member_type': Membership.MemberType.SCOUT,
+            'date_of_birth': '2004-10-13',
+            'address': 'Chamrajpet, Bengaluru',
+            'contact_phone': '9000000002',
+            'parent_or_guardian': 'Example Guardian',
+            'emergency_contact_name': 'Example Guardian',
+            'emergency_contact_phone': '9000000001',
+            'emergency_contact_relationship': 'Parent',
+            'guardian_type': Membership.GuardianType.FATHER,
+            'postal_code': '560018',
+            'gender': 'Male',
+            'school_college': 'Example School',
+            'grade_section': '10 A',
+            'joining_date': '2026-09-21',
+            'applicant_signature_upload': 'applicant-data',
+            'applicant_signature_name': 'applicant.png',
+            'guardian_signature_upload': 'guardian-data',
+            'guardian_signature_name': 'guardian.png',
+            'photo_upload': 'photo-data',
+            'photo_name': 'photo.jpg',
+            'fee_acknowledged': True,
+        }
+
+    def test_visible_required_fields_are_enforced_by_api_serializer(self):
+        for field in ('applicant_name', 'parent_or_guardian', 'guardian_type', 'contact_phone', 'postal_code', 'gender', 'school_college', 'grade_section', 'joining_date', 'applicant_signature_upload', 'guardian_signature_upload', 'photo_upload'):
+            payload = self.valid_payload()
+            payload[field] = ''
+            serializer = MembershipSerializer(data=payload)
+            self.assertFalse(serializer.is_valid(), field)
+            self.assertIn(field, serializer.errors)
+
+    def test_preferred_patrol_is_not_part_of_active_application_api(self):
+        self.assertNotIn('preferred_patrol', MembershipSerializer().fields)
+
+    def test_future_joining_date_is_rejected(self):
+        payload = self.valid_payload()
+        payload['joining_date'] = (timezone.localdate() + timedelta(days=1)).isoformat()
+        serializer = MembershipSerializer(data=payload)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('joining_date', serializer.errors)
+
+    def test_future_birth_date_and_invalid_phone_numbers_are_rejected(self):
+        payload = self.valid_payload()
+        payload['date_of_birth'] = (timezone.localdate() + timedelta(days=1)).isoformat()
+        serializer = MembershipSerializer(data=payload)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('date_of_birth', serializer.errors)
+
+        for field in ('contact_phone', 'emergency_contact_phone'):
+            payload = self.valid_payload()
+            payload[field] = 'not-a-phone'
+            serializer = MembershipSerializer(data=payload)
+            self.assertFalse(serializer.is_valid())
+            self.assertIn(field, serializer.errors)
+
+    def test_short_application_number_retries_collisions(self):
+        with patch('memberships.services.secrets.randbelow', side_effect=[0, 1]), \
+             patch('memberships.services.Membership.objects.filter') as filter_mock, \
+             patch('memberships.services.RetiredApplicationNumber.objects.filter') as retired_filter_mock:
+            filter_mock.return_value.exists.side_effect = [True, False]
+            retired_filter_mock.return_value.exists.return_value = False
+            self.assertEqual(MembershipService.new_application_id(Membership.MemberType.SCOUT, 2026), 'XVK_SCOUT_2026_10001')
+            self.assertEqual(filter_mock.call_count, 2)
+
+    def test_application_number_uses_the_official_section_names(self):
+        expected_sections = {
+            Membership.MemberType.CUB: 'CUB',
+            Membership.MemberType.BULBUL: 'BULBUL',
+            Membership.MemberType.SCOUT: 'SCOUT',
+            Membership.MemberType.GUIDE: 'GUIDE',
+            Membership.MemberType.ROVER: 'ROVER',
+            Membership.MemberType.RANGER: 'RANGER',
+            Membership.MemberType.ALUMNI: 'LIFEMEMBER',
+        }
+        with patch('memberships.services.secrets.randbelow', return_value=3821), \
+             patch('memberships.services.Membership.objects.filter') as filter_mock, \
+             patch('memberships.services.RetiredApplicationNumber.objects.filter') as retired_filter_mock:
+            filter_mock.return_value.exists.return_value = False
+            retired_filter_mock.return_value.exists.return_value = False
+            for member_type, section_name in expected_sections.items():
+                self.assertEqual(
+                    MembershipService.new_application_id(member_type, 2026),
+                    f'XVK_{section_name}_2026_13821',
+                )
+
+    def test_client_cannot_supply_the_authoritative_application_number(self):
+        payload = self.valid_payload()
+        payload['application_id'] = 'XVK_SCOUT_1999_10000'
+        serializer = MembershipSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn('application_id', serializer.validated_data)
+
+    def test_fee_acknowledgement_is_required(self):
+        for value in (False, None):
+            payload = self.valid_payload()
+            if value is None:
+                payload.pop('fee_acknowledged')
+            else:
+                payload['fee_acknowledged'] = value
+            serializer = MembershipSerializer(data=payload)
+            self.assertFalse(serializer.is_valid())
+            self.assertIn('fee_acknowledged', serializer.errors)
+
+    def test_fee_acknowledgement_true_is_accepted(self):
+        serializer = MembershipSerializer(data=self.valid_payload())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_model_declares_one_active_membership_per_user_constraint(self):
+        constraint_names = {constraint.name for constraint in Membership._meta.constraints}
+        self.assertIn('unique_active_membership_per_user', constraint_names)
 
 
 class ApprovalFlowTests(SimpleTestCase):
@@ -107,26 +240,66 @@ class ApprovalFlowTests(SimpleTestCase):
             member.status = Membership.Status.PENDING
             self.assertEqual(response_for(owner).status_code, 404)
 
+    def test_concurrent_rejection_fails_without_overwriting_changed_application(self):
+        member = sample_membership(
+            status=Membership.Status.PENDING,
+            pk='test-id',
+            updated_at=timezone.now(),
+        )
+        admin = SimpleNamespace(role='ADMIN')
+        with patch('memberships.services.Membership.objects.filter') as filter_mock:
+            filter_mock.return_value.update.return_value = 0
+            with self.assertRaisesRegex(ValueError, 'changed during rejection'):
+                MembershipService.reject(membership=member, admin=admin, reason='Not eligible')
+
 
 class MembershipWorkflowIntegrationTests(TestCase):
+    def test_admin_reject_with_malformed_id_returns_not_found(self):
+        administrator = User.objects.create_superuser(
+            email='reject-admin@test.invalid', password='testpass123', full_name='Administrator',
+        )
+        factory = APIRequestFactory()
+        request = factory.post('/memberships/not-an-id/reject/', {'rejection_reason': 'Not eligible'}, format='json')
+        force_authenticate(request, user=administrator)
+
+        response = MembershipRejectView.as_view()(request, membership_id='not-an-id')
+
+        self.assertEqual(response.status_code, 404)
+
     def test_pending_then_one_private_immutable_approved_pdf(self):
         applicant = User.objects.create_user(email='applicant@test.invalid', password='testpass', full_name='Example Member')
         administrator = User.objects.create_superuser(email='admin@test.invalid', password='testpass', full_name='Administrator')
         outsider = User.objects.create_user(email='outsider@test.invalid', password='testpass', full_name='Outsider')
         signature = f'data:image/png;base64,{base64.b64encode(signature_bytes()).decode("ascii")}'
+        photo = f'data:image/jpeg;base64,{base64.b64encode(photo_bytes()).decode("ascii")}'
         member = MembershipService.submit(user=applicant, validated_data={
+            'applicant_name': 'OFFICIAL APPLICANT NAME',
             'member_type': Membership.MemberType.SCOUT, 'date_of_birth': date(2004, 10, 13),
             'address': 'A long but ordinary Bengaluru address', 'parent_or_guardian': 'Example Guardian',
+            'contact_phone': '9000000002',
             'emergency_contact_name': 'Example Guardian', 'emergency_contact_phone': '9000000000',
             'emergency_contact_relationship': 'Parent',
+            'guardian_type': Membership.GuardianType.FATHER,
+            'postal_code': '560018', 'gender': 'Male', 'school_college': 'Example School',
+            'grade_section': '10 A', 'joining_date': date(2026, 9, 21),
             'applicant_signature_upload': signature, 'applicant_signature_name': 'applicant.png',
+            'guardian_signature_upload': signature, 'guardian_signature_name': 'guardian.png',
+            'photo_upload': photo, 'photo_name': 'member.jpg',
+            'fee_acknowledged': True,
         })
+        with self.assertRaisesRegex(ValueError, 'already have an active membership application'):
+            MembershipService.submit(user=applicant, validated_data={})
+        submission_year = timezone.localdate().year
+        self.assertRegex(member.application_id, rf'^XVK_SCOUT_{submission_year}_\d{{5}}$')
+        self.assertEqual(member.applicant_name, 'OFFICIAL APPLICANT NAME')
+        official_application_id = member.application_id
         self.assertEqual(member.status, Membership.Status.PENDING)
         self.assertFalse(member.application_pdf)
         self.assertEqual(member.official_form_version, 0)
 
         member = MembershipService.approve(membership=member, admin=administrator, signature_data=signature, signature_name='admin.png')
         original_pdf = bytes(member.application_pdf)
+        self.assertEqual(member.application_id, official_application_id)
         self.assertEqual(member.status, Membership.Status.APPROVED)
         self.assertEqual(member.official_form_version, 1)
         self.assertTrue(original_pdf.startswith(b'%PDF-'))
@@ -144,3 +317,151 @@ class MembershipWorkflowIntegrationTests(TestCase):
             self.assertEqual(response.status_code, expected_status)
             if expected_status == 200:
                 self.assertEqual(response.content, original_pdf)
+
+    def test_admin_deletes_only_membership_and_account_can_reapply(self):
+        application_year = timezone.localdate().year
+        old_application_id = f'XVK_SCOUT_{application_year}_10000'
+        applicant = User.objects.create_user(
+            email='reapply@test.invalid', password='testpass123', full_name='Account Name', role=User.Role.SCOUT,
+        )
+        administrator = User.objects.create_superuser(
+            email='delete-admin@test.invalid', password='testpass123', full_name='Administrator',
+        )
+        membership = Membership.objects.create(
+            application_id=old_application_id,
+            user=applicant,
+            applicant_name='FIRST OFFICIAL NAME',
+            member_type=Membership.MemberType.SCOUT,
+            status=Membership.Status.APPROVED,
+            date_of_birth=date(2004, 10, 13),
+            address='Chamrajpet, Bengaluru',
+            emergency_contact_name='Example Guardian',
+            emergency_contact_phone='9000000001',
+            emergency_contact_relationship='Parent',
+            parent_or_guardian='Example Guardian',
+            guardian_type=Membership.GuardianType.FATHER,
+            contact_phone='9000000002',
+            postal_code='560018',
+            school_college='Example School',
+            grade_section='10 A',
+            applicant_signature=signature_bytes(),
+            guardian_signature=signature_bytes(),
+            admin_signature=signature_bytes(),
+            member_photo=photo_bytes(),
+            application_pdf=b'%PDF-1.4 approved snapshot',
+            official_form_version=1,
+            approved_at=timezone.now(),
+            approved_by=administrator,
+            joining_date=timezone.localdate(),
+        )
+        membership_pk = str(membership.pk)
+        factory = APIRequestFactory()
+
+        denied_request = factory.delete(f'/memberships/{membership_pk}/')
+        force_authenticate(denied_request, user=applicant)
+        denied_response = MembershipDetailView.as_view()(denied_request, membership_id=membership_pk)
+        self.assertEqual(denied_response.status_code, 403)
+        self.assertTrue(Membership.objects.filter(pk=membership.pk).exists())
+
+        delete_request = factory.delete(f'/memberships/{membership_pk}/')
+        force_authenticate(delete_request, user=administrator)
+        delete_response = MembershipDetailView.as_view()(delete_request, membership_id=membership_pk)
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertFalse(Membership.objects.filter(pk=membership.pk).exists())
+        self.assertTrue(RetiredApplicationNumber.objects.filter(application_id=old_application_id).exists())
+
+        repeated_request = factory.delete(f'/memberships/{membership_pk}/')
+        force_authenticate(repeated_request, user=administrator)
+        repeated_response = MembershipDetailView.as_view()(repeated_request, membership_id=membership_pk)
+        self.assertEqual(repeated_response.status_code, 404)
+
+        applicant.refresh_from_db()
+        self.assertEqual(applicant.role, User.Role.USER)
+        self.assertEqual(applicant.full_name, 'Account Name')
+        self.assertTrue(applicant.check_password('testpass123'))
+
+        signature = f'data:image/png;base64,{base64.b64encode(signature_bytes()).decode("ascii")}'
+        photo = f'data:image/jpeg;base64,{base64.b64encode(photo_bytes()).decode("ascii")}'
+        with patch('memberships.services.secrets.randbelow', side_effect=[0, 1]):
+            reapplied = MembershipService.submit(user=applicant, validated_data={
+                'applicant_name': 'SECOND OFFICIAL NAME',
+                'member_type': Membership.MemberType.SCOUT,
+                'date_of_birth': date(2004, 10, 13),
+                'address': 'Chamrajpet, Bengaluru',
+                'contact_phone': '9000000002',
+                'parent_or_guardian': 'Example Guardian',
+                'emergency_contact_name': 'Example Guardian',
+                'emergency_contact_phone': '9000000001',
+                'emergency_contact_relationship': 'Parent',
+                'guardian_type': Membership.GuardianType.FATHER,
+                'postal_code': '560018',
+                'gender': 'Male',
+                'school_college': 'Example School',
+                'grade_section': '10 A',
+                'joining_date': timezone.localdate(),
+                'applicant_signature_upload': signature,
+                'applicant_signature_name': 'applicant.png',
+                'guardian_signature_upload': signature,
+                'guardian_signature_name': 'guardian.png',
+                'photo_upload': photo,
+                'photo_name': 'member.jpg',
+                'fee_acknowledged': True,
+            })
+        self.assertEqual(reapplied.application_id, f'XVK_SCOUT_{application_year}_10001')
+        self.assertEqual(reapplied.applicant_name, 'SECOND OFFICIAL NAME')
+        self.assertEqual(reapplied.status, Membership.Status.PENDING)
+        applicant.refresh_from_db()
+        self.assertEqual(applicant.full_name, 'Account Name')
+
+
+class ApprovedMemberResourcesTests(TestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.user = User.objects.create_user(
+            email='resources@test.invalid', password='testpass123', full_name='Resource Member',
+        )
+
+    def response_for(self, user=None):
+        request = self.factory.get('/memberships/resources/')
+        if user is not None:
+            force_authenticate(request, user=user)
+        return MembershipResourcesView.as_view()(request)
+
+    def create_membership(self, status):
+        return Membership.objects.create(
+            application_id=f'XVK_SCOUT_2026_{Membership.objects.count() + 20000}',
+            user=self.user,
+            applicant_name='RESOURCE MEMBER',
+            member_type=Membership.MemberType.SCOUT,
+            status=status,
+            date_of_birth=date(2004, 10, 13),
+            address='Chamrajpet, Bengaluru',
+            emergency_contact_name='Example Guardian',
+            emergency_contact_phone='9000000001',
+            emergency_contact_relationship='Parent',
+            parent_or_guardian='Example Guardian',
+            guardian_type=Membership.GuardianType.FATHER,
+            contact_phone='9000000002',
+            postal_code='560018',
+            school_college='Example School',
+            grade_section='10 A',
+            joining_date=timezone.localdate(),
+            fee_acknowledged=True,
+        )
+
+    def test_resources_require_authentication(self):
+        self.assertEqual(self.response_for().status_code, 401)
+
+    def test_resources_reject_no_pending_and_rejected_memberships(self):
+        self.assertEqual(self.response_for(self.user).status_code, 403)
+        for membership_status in (Membership.Status.PENDING, Membership.Status.REJECTED):
+            Membership.objects.all().delete()
+            self.create_membership(membership_status)
+            self.assertEqual(self.response_for(self.user).status_code, 403)
+
+    def test_resources_are_available_to_approved_members_only(self):
+        self.create_membership(Membership.Status.APPROVED)
+        response = self.response_for(self.user)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([resource['id'] for resource in response.data['data']], ['oyms', 'bsg-events'])
+        self.assertEqual(response['Cache-Control'], 'private, no-store')

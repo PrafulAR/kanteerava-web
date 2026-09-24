@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import Announcement
+from api.validators import validate_pdf_upload
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -21,11 +22,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         return image
 
     def validate_attachment(self, document):
-        if document.size > 10 * 1024 * 1024:
-            raise serializers.ValidationError('Attachments must be 10 MB or smaller.')
-        if getattr(document, 'content_type', '') != 'application/pdf':
-            raise serializers.ValidationError('Upload a PDF attachment.')
-        return document
+        return validate_pdf_upload(document)
 
 
 class PublicAnnouncementSerializer(serializers.ModelSerializer):

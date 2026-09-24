@@ -42,7 +42,7 @@ class AlbumSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Album
-        fields = ['id', 'title', 'description', 'is_published', 'photo_count', 'cover_image', 'created_at', 'updated_at']
+        fields = ['id', 'title', 'description', 'category', 'is_published', 'photo_count', 'cover_image', 'created_at', 'updated_at']
         read_only_fields = ['id', 'photo_count', 'cover_image', 'created_at', 'updated_at']
 
     def get_photo_count(self, obj):
@@ -61,4 +61,4 @@ class AlbumSerializer(serializers.ModelSerializer):
 
 class PublicAlbumSerializer(AlbumSerializer):
     class Meta(AlbumSerializer.Meta):
-        fields = ['id', 'title', 'description', 'photo_count', 'cover_image', 'created_at']
+        fields = ['id', 'title', 'description', 'category', 'photo_count', 'cover_image', 'created_at']

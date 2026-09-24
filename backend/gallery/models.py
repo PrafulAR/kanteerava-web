@@ -5,9 +5,14 @@ from events.models import Event
 
 
 class Album(models.Model):
+    class Category(models.TextChoices):
+        DOMESTIC = 'DOMESTIC', 'Domestic'
+        INTERNATIONAL = 'INTERNATIONAL', 'International'
+
     id = ObjectIdAutoField(primary_key=True)
     title = models.CharField(max_length=180)
     description = models.TextField(blank=True)
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.DOMESTIC)
     is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

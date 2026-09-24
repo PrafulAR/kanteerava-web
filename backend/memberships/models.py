@@ -1,9 +1,15 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django_mongodb_backend.fields import ObjectIdAutoField
 
 
 class Membership(models.Model):
+    class GuardianType(models.TextChoices):
+        FATHER = 'FATHER', 'Father'
+        MOTHER = 'MOTHER', 'Mother'
+        GUARDIAN = 'GUARDIAN', 'Guardian'
+
     class MemberType(models.TextChoices):
         SCOUT = 'SCOUT', 'Scout'
         GUIDE = 'GUIDE', 'Guide'
@@ -22,6 +28,7 @@ class Membership(models.Model):
     id = ObjectIdAutoField(primary_key=True)
     application_id = models.CharField(max_length=40, unique=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memberships')
+    applicant_name = models.CharField(max_length=150, blank=True, default='')
     member_type = models.CharField(max_length=10, choices=MemberType.choices)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     scout_id = models.CharField(max_length=50, blank=True)
@@ -32,6 +39,7 @@ class Membership(models.Model):
     emergency_contact_phone = models.CharField(max_length=30)
     emergency_contact_relationship = models.CharField(max_length=80)
     parent_or_guardian = models.CharField(max_length=150, blank=True)
+    guardian_type = models.CharField(max_length=10, choices=GuardianType.choices, blank=True, default='')
     contact_phone = models.CharField(max_length=30, blank=True)
     postal_code = models.CharField(max_length=12, blank=True)
     school_college = models.CharField(max_length=200, blank=True)
@@ -45,6 +53,7 @@ class Membership(models.Model):
     admin_signature = models.BinaryField(null=True, blank=True)
     member_photo = models.BinaryField(null=True, blank=True)
     joining_date = models.DateField(null=True, blank=True)
+    fee_acknowledged = models.BooleanField(default=False)
     rejection_reason = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -56,3 +65,21 @@ class Membership(models.Model):
 
     class Meta:
         ordering = ['-submitted_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=Q(status__in=['PENDING', 'APPROVED']),
+                name='unique_active_membership_per_user',
+            ),
+        ]
+
+
+class RetiredApplicationNumber(models.Model):
+    """Non-PII tombstone that prevents a deleted official number being reused."""
+
+    id = ObjectIdAutoField(primary_key=True)
+    application_id = models.CharField(max_length=40, unique=True)
+    retired_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-retired_at']

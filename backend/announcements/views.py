@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from memberships.views import is_admin
+from api.utils import get_object_or_none
 
 from .models import Announcement
 from .serializers import AnnouncementSerializer, PublicAnnouncementSerializer
@@ -37,12 +38,11 @@ class AnnouncementDetailView(APIView):
         return [AllowAny()] if self.request.method == 'GET' else [IsAuthenticated()]
 
     def get_object(self, announcement_id):
-        return Announcement.objects.get(pk=announcement_id)
+        return get_object_or_none(Announcement, pk=announcement_id)
 
     def get(self, request, announcement_id):
-        try:
-            announcement = self.get_object(announcement_id)
-        except Announcement.DoesNotExist:
+        announcement = self.get_object(announcement_id)
+        if announcement is None:
             return Response({'success': False, 'message': 'Announcement not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         public_request = not request.user.is_authenticated or not is_admin(request.user)
         expired = announcement.expires_at and announcement.expires_at <= timezone.now()
@@ -54,9 +54,8 @@ class AnnouncementDetailView(APIView):
     def patch(self, request, announcement_id):
         if not is_admin(request.user):
             return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            announcement = self.get_object(announcement_id)
-        except Announcement.DoesNotExist:
+        announcement = self.get_object(announcement_id)
+        if announcement is None:
             return Response({'success': False, 'message': 'Announcement not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         serializer = AnnouncementSerializer(announcement, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -65,9 +64,8 @@ class AnnouncementDetailView(APIView):
     def delete(self, request, announcement_id):
         if not is_admin(request.user):
             return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            announcement = self.get_object(announcement_id)
-        except Announcement.DoesNotExist:
+        announcement = self.get_object(announcement_id)
+        if announcement is None:
             return Response({'success': False, 'message': 'Announcement not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         announcement.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

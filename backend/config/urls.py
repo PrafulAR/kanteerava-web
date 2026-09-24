@@ -30,6 +30,8 @@ urlpatterns = [
     path('api/achievements/', include('achievements.urls')),
 ]
 
-# This project is intentionally local-development only. Serve uploaded Gallery
-# media from Django even when the local DEBUG environment value is false.
-urlpatterns += [re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT})]
+# Django's development media server must not become the production file
+# server. Production deployments should serve MEDIA_ROOT from protected
+# object storage or a dedicated web server.
+if settings.DEBUG:
+    urlpatterns += [re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT})]

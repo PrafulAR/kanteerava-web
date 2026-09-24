@@ -125,28 +125,39 @@ def _contained_image(canvas, payload, x, y, width, height, *, crop=False):
             canvas.drawImage(ImageReader(image), x + (width - actual_width) / 2, y + (height - actual_height) / 2, actual_width, actual_height, mask='auto')
 
 
+def _membership_applicant_name(membership):
+    """Return the submitted membership name, with a legacy-record fallback."""
+    return membership.applicant_name or membership.user.full_name
+
+
 def _draw_first_page(canvas, document):
     membership = document.membership
     canvas.saveState()
     canvas.drawImage(_watermark(), 98, 253, width=395, height=395)
     canvas.drawImage(str(BSG_EMBLEM), 42, 729, width=67, height=94, mask='auto', preserveAspectRatio=True)
     canvas.setFillColorRGB(*INK)
-    canvas.setFont('Times-Bold', 15.8)
-    canvas.drawString(117, 801, 'KANTEERAVA OPEN SCOUTS AND GUIDES GROUP')
+    header_center = 337
+    canvas.setFont('Times-Bold', 12.5)
+    canvas.drawCentredString(header_center, 819, 'THE BHARAT SCOUTS AND GUIDES, KARNATAKA')
+    canvas.setFont('Times-Bold', 11.5)
+    canvas.drawCentredString(header_center, 802, 'BENGALURU SOUTH DISTRICT ASSOCIATION')
+    canvas.setFont('Times-Bold', 18)
+    canvas.drawCentredString(header_center, 778, 'KANTEERAVA OPEN SCOUTS AND GUIDES GROUP')
     canvas.setFont('Times-Roman', 10.4)
-    canvas.drawString(117, 780, 'C/O Makkalakoota, Pampa Mahakavi Road, Chamrajpet, Bengaluru, Karnataka 560018')
-    canvas.setFont('Times-Bold', 20)
-    canvas.drawCentredString(PAGE_WIDTH / 2, 744, 'Membership Application')
+    canvas.drawCentredString(header_center, 759, 'C/O Makkalakoota, Pampa Mahakavi Road, Chamrajpet,')
+    canvas.drawCentredString(header_center, 746, 'Bengaluru, Karnataka 560018')
+    canvas.setFont('Times-Bold', 21)
+    canvas.drawCentredString(PAGE_WIDTH / 2, 716, 'Membership Application')
     canvas.setLineWidth(.65)
-    canvas.line(185, 739, 410, 739)
+    canvas.line(185, 711, 410, 711)
     canvas.setFont('Times-Bold', 10.5)
-    canvas.drawString(440, 712, 'Application No.')
+    canvas.drawString(440, 686, 'Application No.')
     canvas.setFont('Times-Roman', 8.3)
     for offset, line in enumerate(_lines(membership.application_id, 113, size=8.3)):
-        canvas.drawString(440, 698 - offset * 10, line)
+        canvas.drawString(440, 672 - offset * 10, line)
 
     # The right column remains stable while the actual form fields flow below the heading.
-    canvas.roundRect(438, 494, 119, 157, 10, stroke=1, fill=0)
+    canvas.rect(438, 494, 119, 157, stroke=1, fill=0)
     if membership.member_photo:
         _contained_image(canvas, membership.member_photo, 443, 499, 109, 147, crop=True)
     else:
@@ -174,7 +185,7 @@ def _draw_first_page(canvas, document):
     if membership.status == membership.Status.APPROVED:
         canvas.setFont('Times-Bold', 12)
         canvas.drawString(46, 96, 'X')
-    approved_on = timezone.localtime(membership.approved_at).strftime('%d %B %Y') if membership.approved_at else ''
+    approved_on = timezone.localtime(membership.approved_at).strftime('%d/%m/%Y') if membership.approved_at else ''
     canvas.setFont('Times-Roman', 9.5)
     canvas.drawString(45, 76, f'Approved on: {approved_on}')
     _contained_image(canvas, membership.admin_signature, 423, 74, 132, 40)
@@ -198,13 +209,13 @@ def build_official_pdf(membership):
     """Generate a PDF from the approval snapshot; the caller stores these exact bytes."""
     if not BSG_EMBLEM.is_file() or not CREST.is_file():
         raise ValueError('The official document logos are unavailable.')
-    if not membership.applicant_signature or not membership.admin_signature:
-        raise ValueError('Applicant and authorized signatures are required.')
+    if not membership.applicant_signature or not membership.guardian_signature or not membership.admin_signature:
+        raise ValueError('Applicant, parent/guardian, and authorized signatures are required.')
 
     stream = BytesIO()
     document = BaseDocTemplate(stream, pagesize=A4, leftMargin=0, rightMargin=0, topMargin=0, bottomMargin=0,
                                title=f'Kanteerava Membership Application {membership.application_id}',
-                               author='XV Kanteerava Open Unit')
+                               author='Kanteerava Open Scouts and Guides Group')
     document.membership = membership
     first_frame = Frame(39, 159, 385, 544, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, id='application')
     later_frame = Frame(40, 50, PAGE_WIDTH - 80, 725, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, id='additional')
@@ -212,26 +223,26 @@ def build_official_pdf(membership):
         PageTemplate(id='official', frames=[first_frame], onPage=_draw_first_page, autoNextPageTemplate='additional'),
         PageTemplate(id='additional', frames=[later_frame], onPage=_draw_additional_page),
     ])
-    submitted_on = timezone.localtime(membership.submitted_at).strftime('%d %B %Y') if membership.submitted_at else ''
+    submitted_on = timezone.localtime(membership.submitted_at).strftime('%d/%m/%Y') if membership.submitted_at else ''
+    guardian_type = membership.get_guardian_type_display() if hasattr(membership, 'get_guardian_type_display') else ''
     fields = [
-        ('Name of the Applicant (In Block letters)', membership.user.full_name),
-        ("Father's / Guardian's Name", membership.parent_or_guardian),
-        ('Date of Birth', membership.date_of_birth.strftime('%d %B %Y')),
+        ('Name of Applicant (In Block letters)', _membership_applicant_name(membership)),
+        ('Father’s / Guardian’s Name', membership.parent_or_guardian),
+        ('Date of Birth', membership.date_of_birth.strftime('%d/%m/%Y')),
         ('Residential Address', membership.address),
         ('Contact Number(s)', membership.contact_phone or membership.user.phone),
-        ('Father/Mother/Guardian', ' / '.join(filter(None, [membership.emergency_contact_name, membership.emergency_contact_phone]))),
+        ('Father/Mother/Guardian', ' / '.join(filter(None, [guardian_type, membership.emergency_contact_name, membership.emergency_contact_phone]))),
         ('Pin Code', membership.postal_code),
         ('E-mail Id', membership.user.email),
-        ('Name of the School / College', membership.school_college),
+        ('Name of School/College', membership.school_college),
         ('Grade & Section', membership.grade_section),
         ('Hobbies', membership.hobbies),
         ('Introduced By', membership.introduced_by),
         ('Section / Wing', membership.get_member_type_display()),
         ('Gender', membership.gender),
         ('Emergency relationship', membership.emergency_contact_relationship),
-        ('Preferred patrol / group', membership.preferred_patrol),
         ('Previous Scout / Guide experience', membership.previous_experience),
-        ('Joining date', membership.joining_date.strftime('%d %B %Y') if membership.joining_date else ''),
+        ('Joining Date', membership.joining_date.strftime('%d/%m/%Y') if membership.joining_date else ''),
         ('Date', submitted_on),
     ]
     document.build([FormField(label, value) for label, value in fields])

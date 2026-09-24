@@ -1,9 +1,4 @@
-const SOCIAL_LINKS = {
-  instagram: 'https://www.instagram.com/xv_kanteerava_open_unit/',
-  facebook: 'https://www.facebook.com/p/Kanteerava-Scouts-and-Guides-100071265575034/',
-  google: 'https://share.google/pqSoMaHOijLaguqUX',
-  maps: 'https://www.google.com/maps/place/Xv+Kanteerava+Scout+Group/@12.9575828,77.5726532,808m/data=!3m2!1e3!4b1!4m6!3m5!1s0x3bae1532a9c96d85:0xdc5404557c95024e!8m2!3d12.9575828!4d77.5726532!16s%2Fg%2F11s5vvyscd?entry=ttu&g_ep=EgoyMDI2MDkwNi4wIKXMDSoASAFQAw%3D%3D',
-} as const
+import { SOCIAL_LINKS } from '../../config/socialLinks'
 
 function SocialMark({ type }: { type: keyof typeof SOCIAL_LINKS }) {
   if (type === 'instagram') return <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="10" width="44" height="44" rx="13"/><circle cx="32" cy="32" r="11"/><circle className="mark-accent" cx="47" cy="18" r="2.5"/></svg>

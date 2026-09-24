@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from memberships.views import is_admin
+from api.utils import get_object_or_none
 
 from .models import Album, Photo
 from .serializers import AlbumSerializer, PhotoSerializer, PublicAlbumSerializer, PublicPhotoSerializer
@@ -39,12 +40,11 @@ class AlbumDetailView(APIView):
         return [AllowAny()] if self.request.method == 'GET' else [IsAuthenticated()]
 
     def get_object(self, album_id):
-        return Album.objects.get(pk=album_id)
+        return get_object_or_none(Album, pk=album_id)
 
     def get(self, request, album_id):
-        try:
-            album = self.get_object(album_id)
-        except Album.DoesNotExist:
+        album = self.get_object(album_id)
+        if album is None:
             return Response({'success': False, 'message': 'Gallery album not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         admin = request.user.is_authenticated and is_admin(request.user)
         if not album.is_published and not admin:
@@ -55,9 +55,8 @@ class AlbumDetailView(APIView):
     def patch(self, request, album_id):
         if not is_admin(request.user):
             return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            album = self.get_object(album_id)
-        except Album.DoesNotExist:
+        album = self.get_object(album_id)
+        if album is None:
             return Response({'success': False, 'message': 'Gallery album not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         serializer = AlbumSerializer(album, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -66,9 +65,8 @@ class AlbumDetailView(APIView):
     def delete(self, request, album_id):
         if not is_admin(request.user):
             return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            album = self.get_object(album_id)
-        except Album.DoesNotExist:
+        album = self.get_object(album_id)
+        if album is None:
             return Response({'success': False, 'message': 'Gallery album not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         GalleryService.delete_album(album=album)
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -81,12 +79,11 @@ class PhotoListView(APIView):
         return [AllowAny()] if self.request.method == 'GET' else [IsAuthenticated()]
 
     def get_album(self, album_id):
-        return Album.objects.get(pk=album_id)
+        return get_object_or_none(Album, pk=album_id)
 
     def get(self, request, album_id):
-        try:
-            album = self.get_album(album_id)
-        except Album.DoesNotExist:
+        album = self.get_album(album_id)
+        if album is None:
             return Response({'success': False, 'message': 'Gallery album not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         admin = request.user.is_authenticated and is_admin(request.user)
         if not album.is_published and not admin:
@@ -98,9 +95,8 @@ class PhotoListView(APIView):
     def post(self, request, album_id):
         if not is_admin(request.user):
             return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            album = self.get_album(album_id)
-        except Album.DoesNotExist:
+        album = self.get_album(album_id)
+        if album is None:
             return Response({'success': False, 'message': 'Gallery album not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         serializer = PhotoSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -113,14 +109,13 @@ class PhotoDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, photo_id):
-        return Photo.objects.get(pk=photo_id)
+        return get_object_or_none(Photo, pk=photo_id)
 
     def patch(self, request, photo_id):
         if not is_admin(request.user):
             return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            photo = self.get_object(photo_id)
-        except Photo.DoesNotExist:
+        photo = self.get_object(photo_id)
+        if photo is None:
             return Response({'success': False, 'message': 'Gallery photo not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         serializer = PhotoSerializer(photo, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -129,9 +124,8 @@ class PhotoDetailView(APIView):
     def delete(self, request, photo_id):
         if not is_admin(request.user):
             return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            photo = self.get_object(photo_id)
-        except Photo.DoesNotExist:
+        photo = self.get_object(photo_id)
+        if photo is None:
             return Response({'success': False, 'message': 'Gallery photo not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
         GalleryService.delete_photo(photo=photo)
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -3,6 +3,7 @@ import axios from 'axios'
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api',
   headers: { 'Content-Type': 'application/json' },
+  timeout: 15_000,
 })
 
 apiClient.interceptors.request.use((config) => {
@@ -26,6 +27,7 @@ apiClient.interceptors.response.use(
       } catch {
         localStorage.removeItem('scout_access_token')
         localStorage.removeItem('scout_refresh_token')
+        window.dispatchEvent(new Event('scout-auth-expired'))
       }
     }
     return Promise.reject(error)

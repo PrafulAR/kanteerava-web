@@ -9,9 +9,11 @@ export interface Membership {
   user_name: string
   user_email: string
   user_phone: string
+  applicant_name: string
   member_id: string
   pdf_available: boolean
   applicant_signature_available: boolean
+  guardian_signature_available: boolean
   member_type: MemberType
   status: MembershipStatus
   date_of_birth: string
@@ -21,16 +23,18 @@ export interface Membership {
   emergency_contact_phone: string
   emergency_contact_relationship: string
   parent_or_guardian: string
+  guardian_type: 'FATHER' | 'MOTHER' | 'GUARDIAN' | ''
   contact_phone: string
   postal_code: string
   school_college: string
   grade_section: string
   hobbies: string
   introduced_by: string
-  preferred_patrol: string
   previous_experience: string
   applicant_signature_upload?: string
   applicant_signature_name?: string
+  guardian_signature_upload?: string
+  guardian_signature_name?: string
   photo_upload?: string
   photo_name?: string
   joining_date: string | null
@@ -39,20 +43,33 @@ export interface Membership {
   approved_at: string | null
 }
 
-export type MembershipApplicationInput = Pick<Membership, 'member_type' | 'date_of_birth' | 'gender' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'parent_or_guardian' | 'contact_phone' | 'postal_code' | 'school_college' | 'grade_section' | 'hobbies' | 'introduced_by' | 'preferred_patrol' | 'previous_experience'> & {
+export interface MembershipResource {
+  id: string
+  title: string
+  description: string
+  url: string
+  action_label: string
+}
+
+export type MembershipApplicationInput = Pick<Membership, 'applicant_name' | 'member_type' | 'date_of_birth' | 'gender' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'parent_or_guardian' | 'guardian_type' | 'contact_phone' | 'postal_code' | 'school_college' | 'grade_section' | 'hobbies' | 'introduced_by' | 'previous_experience'> & {
   joining_date: string | null
   applicant_signature_upload: string
   applicant_signature_name: string
+  guardian_signature_upload: string
+  guardian_signature_name: string
   photo_upload: string
   photo_name: string
+  fee_acknowledged: boolean
 }
 
 export const getMemberships = () => apiClient.get<{ data: Membership[] }>('/memberships/')
+export const getMembershipResources = () => apiClient.get<{ data: MembershipResource[] }>('/memberships/resources/')
 export const applyForMembership = (payload: MembershipApplicationInput) => apiClient.post<{ data: Membership }>('/memberships/apply/', payload)
 export const getAdminDashboard = () => apiClient.get<{ data: AdminSummary }>('/memberships/admin-dashboard/')
 export const approveMembership = (id: string, signature: { data: string; name: string }) => apiClient.post<{ data: Membership }>(`/memberships/${id}/approve/`, { authorized_signature: signature.data, authorized_signature_name: signature.name })
 export const rejectMembership = (id: string, rejection_reason: string) => apiClient.post<{ data: Membership }>(`/memberships/${id}/reject/`, { rejection_reason })
 export const updateMembership = (id: string, payload: Partial<Membership>) => apiClient.patch<{ data: Membership }>(`/memberships/${id}/`, payload)
+export const deleteMembership = (id: string) => apiClient.delete<{ data: Record<string, never> }>(`/memberships/${id}/`)
 export const getMembershipPdf = (id: string, download = false) => apiClient.get<Blob>(`/memberships/${id}/pdf/`, { responseType: 'blob', params: download ? { download: 1 } : undefined })
 export const getMemberDirectory = () => apiClient.get<{ data: { counts: Record<MemberType, number> } }>('/memberships/directory/')
 export const getWingMembers = (wing: MemberType, search = '') => apiClient.get<{ data: Membership[] }>(`/memberships/directory/${wing}/`, { params: search ? { search } : undefined })

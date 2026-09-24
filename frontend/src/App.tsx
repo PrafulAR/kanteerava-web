@@ -3,8 +3,8 @@ import type { FormEvent } from 'react'
 import { isAxiosError } from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import apiClient from './api/axios'
-import { getCurrentUser, login, register, type AuthUser } from './api/authApi'
-import { approveMembership, applyForMembership, getMembershipPdf, getAdminDashboard, getMemberships, rejectMembership, updateMembership, type AdminSummary, type MemberType, type Membership } from './api/membershipApi'
+import { getCurrentUser, logout, type AuthUser, type LoginResponse } from './api/authApi'
+import { approveMembership, applyForMembership, deleteMembership, getMembershipPdf, getAdminDashboard, getMembershipResources, getMemberships, rejectMembership, updateMembership, type AdminSummary, type MemberType, type Membership, type MembershipResource } from './api/membershipApi'
 import { getEvents, type EventItem } from './api/eventApi'
 import { getAnnouncements, type AnnouncementItem } from './api/announcementApi'
 import { getGalleryAlbums, type GalleryAlbum } from './api/galleryApi'
@@ -23,27 +23,24 @@ import { GalleryAdminPanel } from './components/gallery/GalleryAdminPanel'
 import { GalleryFeed } from './components/gallery/GalleryFeed'
 import { AchievementFeed } from './components/achievements/AchievementFeed'
 import { AchievementAdminPanel } from './components/achievements/AchievementAdminPanel'
-import { MembershipPanel } from './components/membership/MembershipPanel'
+import { MembershipPanel, type MembershipApplication } from './components/membership/MembershipPanel'
 import type { SignaturePayload } from './components/membership/SignatureInput'
 import { Hero } from './components/public/Hero'
 import { SocialConnect } from './components/public/SocialConnect'
 import { SiteNav } from './components/navigation/SiteNav'
-import { AboutPage, ContactPage, HomeProgrammes, ProgrammesPage } from './pages/PublicPages'
+import { ContextualBackButton } from './components/navigation/ContextualBackButton'
+import { SiteFooter } from './components/navigation/SiteFooter'
+import { todayInputValue } from './utils/date'
+import { AboutPage, ContactPage, HomeProgrammes, ProgrammesPage, RashtrapatiAwardShowcase } from './pages/PublicPages'
 import './App.css'
 
-type AuthMode = 'login' | 'register'
-type Application = { member_type: MemberType; date_of_birth: string; gender: string; address: string; emergency_contact_name: string; emergency_contact_phone: string; emergency_contact_relationship: string; parent_or_guardian: string; contact_phone: string; postal_code: string; school_college: string; grade_section: string; hobbies: string; introduced_by: string; preferred_patrol: string; previous_experience: string; joining_date: string; applicant_signature_upload: string; applicant_signature_name: string; photo_upload: string; photo_name: string }
-
-const initialApplication: Application = { member_type: 'SCOUT', date_of_birth: '', gender: '', address: '', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relationship: '', parent_or_guardian: '', contact_phone: '', postal_code: '', school_college: '', grade_section: '', hobbies: '', introduced_by: '', preferred_patrol: '', previous_experience: '', joining_date: '', applicant_signature_upload: '', applicant_signature_name: '', photo_upload: '', photo_name: '' }
-
-const newApplication = (): Application => ({ ...initialApplication })
+const newApplication = (applicantName = ''): MembershipApplication => ({ applicant_name: applicantName, member_type: '', date_of_birth: '', gender: '', address: '', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relationship: '', parent_or_guardian: '', guardian_type: '', contact_phone: '', postal_code: '', school_college: '', grade_section: '', hobbies: '', introduced_by: '', previous_experience: '', joining_date: todayInputValue(), is_existing_member: false, applicant_signature_upload: '', applicant_signature_name: '', guardian_signature_upload: '', guardian_signature_name: '', photo_upload: '', photo_name: '', fee_acknowledged: false })
 
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const path = location.pathname
   const isHome = path === '/'
-  const isAdminPath = path === '/admin' || path.startsWith('/admin/')
   const directoryMatch = path.match(/^\/admin\/members(?:\/([^/]+))?(?:\/([^/]+))?\/?$/)
   const directoryWing = directoryMatch?.[1]?.toUpperCase() as MemberType | undefined
   const directoryMemberId = directoryMatch?.[2]
@@ -56,14 +53,14 @@ function App() {
   const announcementDetailId = path.match(/^\/announcements\/([^/]+)\/?$/)?.[1]
   const [status, setStatus] = useState('Connecting to the Scout Group API...')
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [mode, setMode] = useState<AuthMode>('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
   const [message, setMessage] = useState('')
   const [membership, setMembership] = useState<Membership | null>(null)
+  const [membershipResources, setMembershipResources] = useState<MembershipResource[]>([])
+  const [membershipResourcesLoading, setMembershipResourcesLoading] = useState(false)
+  const [membershipResourcesError, setMembershipResourcesError] = useState('')
   const [showApplication, setShowApplication] = useState(false)
-  const [application, setApplication] = useState<Application>(newApplication)
+  const [membershipSubmitting, setMembershipSubmitting] = useState(false)
+  const [application, setApplication] = useState<MembershipApplication>(newApplication)
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null)
   const [adminApplications, setAdminApplications] = useState<Membership[]>([])
   const [events, setEvents] = useState<EventItem[]>([])
@@ -91,7 +88,21 @@ function App() {
   const refreshAnnouncements = async () => { const response = await getAnnouncements(); setAnnouncements(response.data.data) }
   const refreshMembership = async () => {
     const response = await getMemberships()
-    setMembership(response.data.data[0] ?? null)
+    const currentMembership = response.data.data[0] ?? null
+    setMembership(currentMembership)
+    setMembershipResources([])
+    setMembershipResourcesLoading(false)
+    setMembershipResourcesError('')
+    if (currentMembership?.status !== 'APPROVED') return
+    setMembershipResourcesLoading(true)
+    try {
+      const resourceResponse = await getMembershipResources()
+      setMembershipResources(resourceResponse.data.data)
+    } catch {
+      setMembershipResourcesError('Member resources could not be loaded. Please try again later.')
+    } finally {
+      setMembershipResourcesLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -103,6 +114,7 @@ function App() {
     if (!localStorage.getItem('scout_access_token')) return
     getCurrentUser().then((response) => {
       setUser(response.data.data)
+      setApplication(newApplication(response.data.data.full_name))
       if (response.data.data.is_admin) {
         getAdminDashboard().then((dashboard) => setAdminSummary(dashboard.data.data)).catch(() => undefined)
         getMemberships().then((items) => setAdminApplications(items.data.data)).catch(() => undefined)
@@ -116,28 +128,14 @@ function App() {
     }).catch(() => undefined)
   }, [])
 
-  const submitAuth = async (event: FormEvent) => {
-    event.preventDefault()
+  const completeAuthentication = async (auth: LoginResponse) => {
     try {
-      if (mode === 'register') {
-        await register({ full_name: fullName, email, password, confirm_password: password, phone: '' })
-        setFullName('')
-        setEmail('')
-        setPassword('')
-        setMessage('Account created. Please sign in with your email and password.')
-        setMode('login')
-        return
-      }
-      const response = await login(email, password)
-      localStorage.setItem('scout_access_token', response.data.data.access)
-      localStorage.setItem('scout_refresh_token', response.data.data.refresh)
-      setUser(response.data.data.user)
-      setEmail('')
-      setPassword('')
-      setFullName('')
-      setApplication(newApplication())
+      localStorage.setItem('scout_access_token', auth.access)
+      localStorage.setItem('scout_refresh_token', auth.refresh)
+      setUser(auth.user)
+      setApplication(newApplication(auth.user.full_name))
       setShowApplication(false)
-      if (response.data.data.user.is_admin) {
+      if (auth.user.is_admin) {
         getAdminDashboard().then((dashboard) => setAdminSummary(dashboard.data.data)).catch(() => setMessage('Unable to load the Admin dashboard.'))
         getMemberships().then((items) => setAdminApplications(items.data.data)).catch(() => setMessage('Unable to load membership applications.'))
         refreshGalleryAlbums().catch(() => setMessage('Unable to load gallery management.'))
@@ -148,40 +146,40 @@ function App() {
         await refreshMembership().catch(() => setMembership(null))
       }
       setMessage('Welcome back.')
-      navigate(response.data.data.user.is_admin ? '/admin' : '/')
+      navigate(auth.user.is_admin ? '/admin' : '/')
     } catch (error) { setMessage(authErrorMessage(error)) }
   }
 
   const submitMembership = async (event: FormEvent) => {
     event.preventDefault()
+    if (membershipSubmitting) return
+    setMembershipSubmitting(true)
     try {
-      const response = await applyForMembership({ ...application, joining_date: application.joining_date || null })
+      const { is_existing_member: _isExistingMember, ...applicationPayload } = application
+      void _isExistingMember
+      const response = await applyForMembership({ ...applicationPayload, member_type: application.member_type as MemberType, joining_date: application.joining_date || null })
       setMembership(response.data.data)
+      setMembershipResources([])
+      setMembershipResourcesError('')
       setShowApplication(false)
-      setApplication(newApplication())
+      setApplication(newApplication(user?.full_name ?? ''))
       setMessage('Your membership application is pending Admin approval.')
     } catch (error) { setMessage(authErrorMessage(error)) }
-  }
-
-  const changeAuthMode = (nextMode: AuthMode) => {
-    setMode(nextMode)
-    setEmail('')
-    setPassword('')
-    setFullName('')
-    setMessage('')
+    finally { setMembershipSubmitting(false) }
   }
 
   const signOut = () => {
+    const accessToken = localStorage.getItem('scout_access_token')
+    if (accessToken) void logout(accessToken).catch(() => undefined)
     localStorage.removeItem('scout_access_token')
     localStorage.removeItem('scout_refresh_token')
     setUser(null)
     setMembership(null)
+    setMembershipResources([])
+    setMembershipResourcesLoading(false)
+    setMembershipResourcesError('')
     setAdminSummary(null)
     setAdminApplications([])
-    setEmail('')
-    setPassword('')
-    setFullName('')
-    setMode('login')
     setShowApplication(false)
     setApplication(newApplication())
     setMessage('')
@@ -203,7 +201,10 @@ function App() {
       await rejectMembership(id, reason)
       setAdminApplications((current) => current.filter((item) => item.id !== id))
       setAdminSummary((current) => current ? { ...current, pending_applications: current.pending_applications - 1 } : current)
-    } catch { setMessage('Unable to reject this application.') }
+    } catch (error) {
+      setMessage(authErrorMessage(error))
+      throw error
+    }
   }
 
   const saveApplication = async (id: string, payload: Partial<Membership>) => {
@@ -215,10 +216,26 @@ function App() {
     } catch { setMessage('Unable to save application corrections.') }
   }
 
-  const saveApplicantSignature = async (id: string, signature: SignaturePayload) => {
-    const response = await updateMembership(id, { applicant_signature_upload: signature.data, applicant_signature_name: signature.name })
+  const permanentlyDeleteMembership = async (id: string) => {
+    try {
+      await deleteMembership(id)
+      setAdminApplications((current) => current.filter((item) => item.id !== id))
+      const dashboard = await getAdminDashboard()
+      setAdminSummary(dashboard.data.data)
+      setMessage('Membership permanently deleted. The website account remains active and can reapply.')
+    } catch (error) {
+      setMessage(authErrorMessage(error))
+      throw error
+    }
+  }
+
+  const savePendingSignatures = async (id: string, applicantSignature: SignaturePayload | null, guardianSignature: SignaturePayload | null) => {
+    const response = await updateMembership(id, {
+      ...(applicantSignature ? { applicant_signature_upload: applicantSignature.data, applicant_signature_name: applicantSignature.name } : {}),
+      ...(guardianSignature ? { guardian_signature_upload: guardianSignature.data, guardian_signature_name: guardianSignature.name } : {}),
+    })
     setMembership(response.data.data)
-    setMessage('Your signature has been saved for Admin review.')
+    setMessage('The required signature information has been saved for Admin review.')
   }
 
   const openMembershipForm = async (id: string, download = false) => {
@@ -241,27 +258,52 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    const clearExpiredSession = () => {
+      setUser(null)
+      setMembership(null)
+      setMembershipResources([])
+      setMembershipResourcesLoading(false)
+      setMembershipResourcesError('')
+      setAdminSummary(null)
+      setAdminApplications([])
+      setShowApplication(false)
+      setMembershipSubmitting(false)
+      setApplication(newApplication())
+      setMessage('Your session has expired. Please sign in again.')
+    }
+    window.addEventListener('scout-auth-expired', clearExpiredSession)
+    return () => window.removeEventListener('scout-auth-expired', clearExpiredSession)
+  }, [])
+
   const pageContent = path === '/about' ? <AboutPage /> : path === '/programmes' ? <ProgrammesPage /> : path === '/contact' ? <ContactPage /> : path === '/events' ? <EventFeed events={events} loading={eventsLoading} error={eventsError} /> : eventDetailId ? <EventDetails id={eventDetailId} /> : path === '/gallery' ? <GalleryFeed albums={galleryAlbums} loading={galleryLoading} error={galleryError} /> : path === '/achievements' ? <AchievementFeed items={achievements} loading={achievementsLoading} error={achievementsError} /> : path === '/announcements' ? <AnnouncementFeed announcements={announcements} loading={announcementsLoading} error={announcementsError} /> : announcementDetailId ? <AnnouncementDetails id={announcementDetailId} /> : null
+  const knownAdminRoute = path === '/admin' || isApplicationsAdmin || Boolean(directoryMatch) || isGalleryAdmin || isAchievementsAdmin || isEventsAdmin || isNewsroomAdmin
+  const knownPublicRoute = isHome || ['/about', '/programmes', '/contact', '/events', '/gallery', '/achievements', '/announcements', '/join'].includes(path) || Boolean(eventDetailId) || Boolean(announcementDetailId)
+  const routeNotFound = !knownPublicRoute && !knownAdminRoute
 
   return <main className="shell">
     <div className="utility"><span>XV KANTEERAVA OPEN UNIT</span><span>Adventure • Service • Community</span></div>
     {!isHome && <SiteNav user={user} internal onSignOut={signOut} />}
     {isHome && <><section className="hero"><SiteNav user={user} onSignOut={signOut} /><Hero status={status} /></section></>}
     {isHome && <HomeProgrammes />}
-    {isAdminPath && <section className="admin-hero"><p className="kicker">XVK Scout Group</p><h1>Admin<br /><em>workspace.</em></h1><p>Manage memberships and the work behind the movement.</p></section>}
+    {isHome && <RashtrapatiAwardShowcase />}
+    {knownAdminRoute && <section className="admin-hero"><p className="kicker">XVK Scout Group</p><h1>Admin<br /><em>workspace.</em></h1><p>Manage memberships and the work behind the movement.</p></section>}
     {pageContent}
-    {user && path === '/join' && <MembershipPanel membership={membership} message={message} showApplication={showApplication} application={application} onOpenApplication={() => setShowApplication(true)} onUpdateApplication={(field, value) => setApplication((current) => ({ ...current, [field]: value }))} onSubmitApplication={submitMembership} onSaveSignature={saveApplicantSignature} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} />}
-    {path === '/admin' && user?.is_admin && adminSummary && <AdminPanel summary={adminSummary} message={message} applications={adminApplications} onApprove={approveApplication} onReject={rejectApplication} onUpdate={saveApplication} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} />}
-    {isApplicationsAdmin && user?.is_admin && adminSummary && <AdminWorkspacePage label="Membership Applications" title="Membership Applications" description="Review and manage new membership requests."><AdminPanel view="applications" summary={adminSummary} message={message} applications={adminApplications} onApprove={approveApplication} onReject={rejectApplication} onUpdate={saveApplication} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} /></AdminWorkspacePage>}
-    {directoryMatch && user?.is_admin && <AdminWorkspacePage label="Member Directory" keepChildHeading><MemberDirectory key={path} wing={directoryWing} memberId={directoryMemberId} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} /></AdminWorkspacePage>}
+    {user && path === '/join' && <MembershipPanel membership={membership} message={message} applicantEmail={user.email} showApplication={showApplication} application={application} submitting={membershipSubmitting} onOpenApplication={() => { setApplication((current) => ({ ...current, applicant_name: current.applicant_name || user.full_name })); setShowApplication(true) }} onUpdateApplication={(field, value) => setApplication((current) => ({ ...current, [field]: value }))} onSubmitApplication={submitMembership} onSaveSignatures={savePendingSignatures} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} resources={membershipResources} resourcesLoading={membershipResourcesLoading} resourcesError={membershipResourcesError} />}
+    {path === '/admin' && user?.is_admin && adminSummary && <AdminPanel summary={adminSummary} message={message} applications={adminApplications} onApprove={approveApplication} onReject={rejectApplication} onUpdate={saveApplication} onDelete={permanentlyDeleteMembership} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} />}
+    {isApplicationsAdmin && user?.is_admin && adminSummary && <AdminWorkspacePage label="Membership Applications" title="Membership Applications" description="Review and manage new membership requests."><AdminPanel view="applications" summary={adminSummary} message={message} applications={adminApplications} onApprove={approveApplication} onReject={rejectApplication} onUpdate={saveApplication} onDelete={permanentlyDeleteMembership} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} /></AdminWorkspacePage>}
+    {directoryMatch && user?.is_admin && <AdminWorkspacePage label="Member Directory" keepChildHeading><MemberDirectory key={path} wing={directoryWing} memberId={directoryMemberId} onDelete={permanentlyDeleteMembership} onView={(id) => openMembershipForm(id)} onDownload={(id) => openMembershipForm(id, true)} /></AdminWorkspacePage>}
     {isGalleryAdmin && user?.is_admin && <AdminWorkspacePage label="Gallery" title="Gallery" description="Create albums, upload photos, edit albums and manage gallery content."><GalleryAdminPanel albums={galleryAlbums} events={events} onRefreshAlbums={refreshGalleryAlbums} /></AdminWorkspacePage>}
     {isAchievementsAdmin && user?.is_admin && <AdminWorkspacePage label="Achievements" title="Achievements" description="Add, edit and manage group achievements and recognitions."><AchievementAdminPanel items={achievements} onRefresh={refreshAchievements} /></AdminWorkspacePage>}
     {isEventsAdmin && user?.is_admin && <AdminWorkspacePage label="Events" title="Events" description="Create, publish and manage upcoming and past events."><EventAdminPanel events={events} onRefresh={refreshEvents} /></AdminWorkspacePage>}
     {isNewsroomAdmin && user?.is_admin && <AdminWorkspacePage label="Newsroom" title="Newsroom" description="Create and manage notices, updates, reports and stories."><AnnouncementAdminPanel posts={announcements} onRefresh={refreshAnnouncements} /></AdminWorkspacePage>}
-    {((path === '/join' || isAdminPath) && !user) && <AuthPanel mode={mode} email={email} password={password} fullName={fullName} message={message} onModeChange={changeAuthMode} onEmailChange={setEmail} onPasswordChange={setPassword} onFullNameChange={setFullName} onSubmit={submitAuth} adminOnly={isAdminPath} />}
-    {isAdminPath && user && !user.is_admin && <section className="route-message"><h2>Admin access required.</h2><p>This account does not have permission to access the workspace.</p></section>}
+    {((path === '/join' || knownAdminRoute) && !user) && <AuthPanel onAuthenticated={completeAuthentication} adminOnly={knownAdminRoute} />}
+    {knownAdminRoute && user && !user.is_admin && <section className="route-message"><h2>Admin access required.</h2><p>This account does not have permission to access the workspace.</p></section>}
+    {knownAdminRoute && user?.is_admin && !adminSummary && <section className="route-message"><h2>Loading Admin workspace.</h2><p>{message || 'Retrieving the latest dashboard information.'}</p></section>}
+    {routeNotFound && <section className="route-message"><h2>Page not found.</h2><p>The page you requested does not exist.</p></section>}
     {isHome && <SocialConnect />}
-    <footer><span className="footer-signature">Made with ❤️, by Kanteeravas, for Kanteerava. ⚜️</span><a className="footer-email" href="mailto:kanteeravascoutsnguides@gmail.com">kanteeravascoutsnguides@gmail.com</a></footer>
+    <ContextualBackButton />
+    <SiteFooter />
   </main>
 }
 
@@ -269,6 +311,9 @@ function authErrorMessage(error: unknown): string {
   if (!isAxiosError(error) || !error.response?.data) return 'Unable to connect to the server. Please try again.'
 
   const data = error.response.data
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    return 'Unable to complete your request. Please try again.'
+  }
   if (typeof data.message === 'string') return data.message
   if (typeof data.detail === 'string') return data.detail
 
@@ -281,6 +326,3 @@ function authErrorMessage(error: unknown): string {
 }
 
 export default App
-
-
-

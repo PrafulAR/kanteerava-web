@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import Event, EventRegistration
+from api.validators import validate_pdf_upload
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -18,10 +19,11 @@ class EventSerializer(serializers.ModelSerializer):
         if end and start and end < start:
             raise serializers.ValidationError({'end_date': 'End date cannot be before start date.'})
         circular = attrs.get('circular')
-        if circular and getattr(circular, 'content_type', '') != 'application/pdf':
-            raise serializers.ValidationError({'circular': 'Upload a PDF circular.'})
-        if circular and circular.size > 10 * 1024 * 1024:
-            raise serializers.ValidationError({'circular': 'Circular PDFs must be 10 MB or smaller.'})
+        if circular:
+            try:
+                validate_pdf_upload(circular)
+            except serializers.ValidationError as error:
+                raise serializers.ValidationError({'circular': error.detail}) from error
         poster = attrs.get('poster')
         if poster and getattr(poster, 'content_type', '') not in {'image/jpeg', 'image/png', 'image/webp'}:
             raise serializers.ValidationError({'poster': 'Upload a JPEG, PNG, or WebP poster.'})

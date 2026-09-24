@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { createEvent, deleteEvent, updateEvent, type EventItem } from '../../api/eventApi'
 import { WINGS } from '../../config/wings'
+import { formatDate } from '../../utils/date'
 
 const categories = [
   ['WEEKLY_MEETING', 'Weekly Meeting'], ['CAMP', 'Camp'], ['TREKKING', 'Trekking'],
@@ -9,7 +10,7 @@ const categories = [
   ['COMPETITION', 'Competition'], ['STATE_NATIONAL', 'State / National Event'],
   ['INTERNATIONAL', 'International Event'], ['OTHER', 'Other'],
 ]
-const blank = { title: '', category: 'WEEKLY_MEETING', short_summary: '', description: '', location: '', address: '', maps_link: '', start_date: '', end_date: '', eligible_wings: ['ALL'], organizer: 'XV Kanteerava Open Scout Group', instructions: '', registration_link: '', registration_deadline: '', registration_details: '', contact_person: '', contact_phone: '', contact_email: '', contact_instructions: '', is_published: false }
+const blank = { title: '', category: 'WEEKLY_MEETING', short_summary: '', description: '', location: '', address: '', maps_link: '', start_date: '', end_date: '', eligible_wings: ['ALL'], organizer: 'Kanteerava Open Scout Group', instructions: '', registration_link: '', registration_deadline: '', registration_details: '', contact_person: '', contact_phone: '', contact_email: '', contact_instructions: '', is_published: false }
 type Draft = typeof blank
 const localDate = (value?: string | null) => {
   if (!value) return ''
@@ -52,7 +53,7 @@ export function EventAdminPanel({ events, onRefresh }: { events: EventItem[]; on
   }
   return <section className="admin-panel event-admin">
     <div className="panel-heading"><p className="kicker">Admin workspace</p><h2>Events</h2></div>
-    <div className="review-list"><h3>Event records</h3>{!events.length && <p className="membership-copy">No events yet.</p>}{events.map((item) => <div className="review-row" key={item.id}><span><strong>{item.title}</strong><small>{item.is_published ? 'Published' : 'Draft'} / {new Date(item.start_date).toLocaleDateString()}</small></span><div className="review-actions"><button className="review-action" type="button" onClick={() => edit(item)}>Edit</button><button className="review-action" type="button" onClick={async () => { const data = new FormData(); data.append('is_published', String(!item.is_published)); await updateEvent(item.id, data); await onRefresh() }}>{item.is_published ? 'Unpublish' : 'Publish'}</button><button className="review-action danger" type="button" onClick={async () => { if (!window.confirm('Delete this event?')) return; await deleteEvent(item.id); await onRefresh() }}>Delete</button></div></div>)}</div>
+    <div className="review-list"><h3>Event records</h3>{!events.length && <p className="membership-copy">No events yet.</p>}{events.map((item) => <div className="review-row" key={item.id}><span><strong>{item.title}</strong><small>{item.is_published ? 'Published' : 'Draft'} / {formatDate(item.start_date)}</small></span><div className="review-actions"><button className="review-action" type="button" onClick={() => edit(item)}>Edit</button><button className="review-action" type="button" onClick={async () => { const data = new FormData(); data.append('is_published', String(!item.is_published)); await updateEvent(item.id, data); await onRefresh() }}>{item.is_published ? 'Unpublish' : 'Publish'}</button><button className="review-action danger" type="button" onClick={async () => { if (!window.confirm('Delete this event?')) return; await deleteEvent(item.id); await onRefresh() }}>Delete</button></div></div>)}</div>
     <form className="event-admin-form" id="event-editor" onSubmit={submit}>
       <div className="event-form-heading"><h3>{editing ? 'Edit Event' : 'Create Event'}</h3>{editing && <button className="review-action" type="button" onClick={reset}>Cancel edit</button>}</div>
       <label>Event title<input required value={draft.title} onChange={(e) => change('title', e.target.value)} /></label>
