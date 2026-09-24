@@ -1,5 +1,6 @@
 from django.apps import AppConfig
-from django_mongodb_backend.fields import ObjectIdAutoField
+from django.contrib.auth.apps import AuthConfig
+from django.contrib.contenttypes.apps import ContentTypesConfig
 
 
 class AccountsConfig(AppConfig):
@@ -7,11 +8,9 @@ class AccountsConfig(AppConfig):
     name = 'accounts'
 
 
-class AuthConfig(AppConfig):
+class MongoAuthConfig(AuthConfig):
     default_auto_field = 'django_mongodb_backend.fields.ObjectIdAutoField'
-    name = 'django.contrib.auth'
 
 
-class ContentTypesConfig(AppConfig):
+class MongoContentTypesConfig(ContentTypesConfig):
     default_auto_field = 'django_mongodb_backend.fields.ObjectIdAutoField'
-    name = 'django.contrib.contenttypes'

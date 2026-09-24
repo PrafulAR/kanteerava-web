@@ -1,11 +1,13 @@
 import re
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import Mock, patch
 
 import requests
 from bson import ObjectId
 from django.core.cache import cache
 from django.conf import settings
+from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -16,6 +18,51 @@ from .authentication import tokens_for_user
 from .models import EmailOTPChallenge, GoogleIdentity, PasswordResetGrant, User
 from .throttles import AuthIPThrottle, RegistrationThrottle
 from .transactional_email import TransactionalEmailError, send_transactional_email
+
+
+class _UpdateResult:
+    def __init__(self, modified_count):
+        self.modified_count = modified_count
+
+
+class _LegacyUsersCollection:
+    def __init__(self, documents):
+        self.documents = documents
+
+    def update_many(self, query, update):
+        field = next(iter(query))
+        value = update['$set'][field]
+        modified_count = 0
+        for document in self.documents:
+            if field not in document:
+                document[field] = value
+                modified_count += 1
+        return _UpdateResult(modified_count)
+
+    def create_index(self, *args, **kwargs):
+        raise AssertionError('prepare_auth_storage must not create model-managed indexes')
+
+
+class _AuthStorageDatabase:
+    def __init__(self, users):
+        self.users = users
+
+    def __getitem__(self, collection_name):
+        if collection_name != 'accounts_user':
+            raise AssertionError(f'Unexpected schema access: {collection_name}')
+        return self.users
+
+
+class _AuthStorageClient:
+    def __init__(self, database):
+        self.database = database
+        self.close_count = 0
+
+    def __getitem__(self, database_name):
+        return self.database
+
+    def close(self):
+        self.close_count += 1
 
 
 @override_settings(
@@ -505,3 +552,42 @@ class TransactionalEmailProviderTests(SimpleTestCase):
                 subject='Verify your account',
                 text_body='Transactional content',
             )
+
+
+class PrepareAuthStorageTests(SimpleTestCase):
+    @patch('accounts.management.commands.prepare_auth_storage.MongoClient')
+    def test_command_only_backfills_missing_legacy_defaults_and_is_idempotent(self, mongo_client):
+        documents = [
+            {'email': 'missing@example.com'},
+            {'email': 'existing@example.com', 'email_verified': False, 'auth_version': 7},
+            {'email': 'partial@example.com', 'auth_version': 2},
+        ]
+        users = _LegacyUsersCollection(documents)
+        client = _AuthStorageClient(_AuthStorageDatabase(users))
+        mongo_client.return_value = client
+
+        first_output = StringIO()
+        second_output = StringIO()
+        call_command('prepare_auth_storage', stdout=first_output)
+        call_command('prepare_auth_storage', stdout=second_output)
+
+        self.assertEqual(documents, [
+            {
+                'email': 'missing@example.com',
+                'email_verified': True,
+                'auth_version': 0,
+            },
+            {
+                'email': 'existing@example.com',
+                'email_verified': False,
+                'auth_version': 7,
+            },
+            {
+                'email': 'partial@example.com',
+                'email_verified': True,
+                'auth_version': 2,
+            },
+        ])
+        self.assertIn('verified defaults: 2, session defaults: 1', first_output.getvalue())
+        self.assertIn('verified defaults: 0, session defaults: 0', second_output.getvalue())
+        self.assertEqual(client.close_count, 2)

@@ -67,8 +67,8 @@ SECURE_HSTS_PRELOAD = env('SECURE_HSTS_PRELOAD')
 # Application definition
 
 INSTALLED_APPS = [
-    'accounts.apps.ContentTypesConfig',
-    'accounts.apps.AuthConfig',
+    'accounts.apps.MongoContentTypesConfig',
+    'accounts.apps.MongoAuthConfig',
     'accounts.apps.AccountsConfig',
     'memberships.apps.MembershipsConfig',
     'leaders.apps.LeadersConfig',
@@ -77,10 +77,16 @@ INSTALLED_APPS = [
     'gallery.apps.GalleryConfig',
     'achievements.apps.AchievementsConfig',
     'django.contrib.staticfiles',
+    'django_mongodb_backend',
     'corsheaders',
     'rest_framework',
     'api',
 ]
+
+MIGRATION_MODULES = {
+    'auth': 'mongo_migrations.auth',
+    'contenttypes': 'mongo_migrations.contenttypes',
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

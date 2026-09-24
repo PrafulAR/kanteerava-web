@@ -25,7 +25,7 @@ The current development slice also includes events at `/api/events/`. Published 
 2. Configure the backend-only Brevo API key and verified sender for verification/reset emails. Set the same Google web client ID in `GOOGLE_OAUTH_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID`; neither the Brevo API key nor any client secret belongs in the frontend.
 3. Install frontend dependencies with `cd frontend` and `npm install`.
 4. Install backend dependencies with `cd backend` and `python -m pip install -r requirements.txt`.
-5. Prepare the authentication indexes/defaults with `cd backend` and `python manage.py prepare_auth_storage`.
+5. Initialize a fresh database with `cd backend` and `python manage.py migrate`. The `prepare_auth_storage` command is only for backfilling security defaults in legacy account documents.
 6. Start Django from `backend` with `python manage.py runserver 8000`.
 7. Start Vite from `frontend` with `npm run dev`.
 
