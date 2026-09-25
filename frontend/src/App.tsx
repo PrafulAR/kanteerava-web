@@ -32,6 +32,7 @@ import { ContextualBackButton } from './components/navigation/ContextualBackButt
 import { SiteFooter } from './components/navigation/SiteFooter'
 import { todayInputValue } from './utils/date'
 import { AboutPage, ContactPage, HomeProgrammes, ProgrammesPage, RashtrapatiAwardShowcase } from './pages/PublicPages'
+import { PrivacyPolicyPage, TermsOfServicePage } from './pages/LegalPages'
 import './App.css'
 
 const newApplication = (applicantName = ''): MembershipApplication => ({ applicant_name: applicantName, member_type: '', date_of_birth: '', gender: '', address: '', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relationship: '', parent_or_guardian: '', guardian_type: '', contact_phone: '', postal_code: '', school_college: '', grade_section: '', hobbies: '', introduced_by: '', previous_experience: '', joining_date: todayInputValue(), is_existing_member: false, applicant_signature_upload: '', applicant_signature_name: '', guardian_signature_upload: '', guardian_signature_name: '', photo_upload: '', photo_name: '', fee_acknowledged: false })
@@ -276,9 +277,9 @@ function App() {
     return () => window.removeEventListener('scout-auth-expired', clearExpiredSession)
   }, [])
 
-  const pageContent = path === '/about' ? <AboutPage /> : path === '/programmes' ? <ProgrammesPage /> : path === '/contact' ? <ContactPage /> : path === '/events' ? <EventFeed events={events} loading={eventsLoading} error={eventsError} /> : eventDetailId ? <EventDetails id={eventDetailId} /> : path === '/gallery' ? <GalleryFeed albums={galleryAlbums} loading={galleryLoading} error={galleryError} /> : path === '/achievements' ? <AchievementFeed items={achievements} loading={achievementsLoading} error={achievementsError} /> : path === '/announcements' ? <AnnouncementFeed announcements={announcements} loading={announcementsLoading} error={announcementsError} /> : announcementDetailId ? <AnnouncementDetails id={announcementDetailId} /> : null
+  const pageContent = path === '/about' ? <AboutPage /> : path === '/programmes' ? <ProgrammesPage /> : path === '/contact' ? <ContactPage /> : path === '/events' ? <EventFeed events={events} loading={eventsLoading} error={eventsError} /> : eventDetailId ? <EventDetails id={eventDetailId} /> : path === '/gallery' ? <GalleryFeed albums={galleryAlbums} loading={galleryLoading} error={galleryError} /> : path === '/achievements' ? <AchievementFeed items={achievements} loading={achievementsLoading} error={achievementsError} /> : path === '/announcements' ? <AnnouncementFeed announcements={announcements} loading={announcementsLoading} error={announcementsError} /> : announcementDetailId ? <AnnouncementDetails id={announcementDetailId} /> : path === '/privacy' ? <PrivacyPolicyPage /> : path === '/terms' ? <TermsOfServicePage /> : null
   const knownAdminRoute = path === '/admin' || isApplicationsAdmin || Boolean(directoryMatch) || isGalleryAdmin || isAchievementsAdmin || isEventsAdmin || isNewsroomAdmin
-  const knownPublicRoute = isHome || ['/about', '/programmes', '/contact', '/events', '/gallery', '/achievements', '/announcements', '/join'].includes(path) || Boolean(eventDetailId) || Boolean(announcementDetailId)
+  const knownPublicRoute = isHome || ['/about', '/programmes', '/contact', '/events', '/gallery', '/achievements', '/announcements', '/join', '/privacy', '/terms'].includes(path) || Boolean(eventDetailId) || Boolean(announcementDetailId)
   const routeNotFound = !knownPublicRoute && !knownAdminRoute
 
   return <main className="shell">

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { SOCIAL_LINKS } from '../../config/socialLinks'
 
 const footerSocials = [
@@ -8,7 +9,13 @@ const footerSocials = [
 
 export function SiteFooter() {
   return <footer>
-    <span className="footer-signature">Made with ❤️, by Kanteeravas, for Kanteerava. ⚜️</span>
+    <div className="footer-meta">
+      <span className="footer-signature">Made with ❤️, by Kanteeravas, for Kanteerava. ⚜️</span>
+      <nav className="footer-legal" aria-label="Legal information">
+        <Link to="/privacy">Privacy Policy</Link>
+        <Link to="/terms">Terms of Service</Link>
+      </nav>
+    </div>
     <nav className="footer-socials" aria-label="Kanteerava social links">
       {footerSocials.map((social) => <a key={social.key} href={SOCIAL_LINKS[social.key]} target="_blank" rel="noopener noreferrer" aria-label={`Visit Kanteerava on ${social.label}`} title={social.label}>
         <svg viewBox="0 0 24 24" aria-hidden="true">{social.path}</svg>
