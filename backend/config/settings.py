@@ -34,6 +34,8 @@ env = environ.Env(
     SECURE_HSTS_SECONDS=(int, 0),
     SECURE_HSTS_INCLUDE_SUBDOMAINS=(bool, False),
     SECURE_HSTS_PRELOAD=(bool, False),
+    TRUST_X_FORWARDED_PROTO=(bool, False),
+    USE_CLOUDINARY=(bool, False),
     BREVO_API_TIMEOUT_SECONDS=(int, 10),
     AUTH_OTP_EXPIRY_MINUTES=(int, 10),
     AUTH_OTP_RESEND_COOLDOWN_SECONDS=(int, 45),
@@ -50,6 +52,7 @@ SECRET_KEY = env(
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
+USE_CLOUDINARY = env('USE_CLOUDINARY')
 
 ALLOWED_HOSTS = env('ALLOWED_HOSTS')
 CSRF_TRUSTED_ORIGINS = env('CSRF_TRUSTED_ORIGINS')
@@ -62,6 +65,11 @@ CSRF_COOKIE_SECURE = env('CSRF_COOKIE_SECURE')
 SECURE_HSTS_SECONDS = env('SECURE_HSTS_SECONDS')
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env('SECURE_HSTS_INCLUDE_SUBDOMAINS')
 SECURE_HSTS_PRELOAD = env('SECURE_HSTS_PRELOAD')
+TRUST_X_FORWARDED_PROTO = env('TRUST_X_FORWARDED_PROTO')
+if TRUST_X_FORWARDED_PROTO:
+    # Enable only behind Render (or another explicitly trusted proxy) that
+    # overwrites X-Forwarded-Proto before forwarding requests to Django.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # Application definition
@@ -83,6 +91,10 @@ INSTALLED_APPS = [
     'api',
 ]
 
+if USE_CLOUDINARY:
+    # Keep local development independent of Cloudinary credentials.
+    INSTALLED_APPS += ['cloudinary_storage', 'cloudinary']
+
 MIGRATION_MODULES = {
     'auth': 'mongo_migrations.auth',
     'contenttypes': 'mongo_migrations.contenttypes',
@@ -90,6 +102,7 @@ MIGRATION_MODULES = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -194,9 +207,47 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+STORAGES = {
+    'default': {
+        'BACKEND': (
+            'cloudinary_storage.storage.MediaCloudinaryStorage'
+            if USE_CLOUDINARY
+            else 'django.core.files.storage.FileSystemStorage'
+        ),
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
+if USE_CLOUDINARY:
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': env('CLOUDINARY_CLOUD_NAME', default=''),
+        'API_KEY': env('CLOUDINARY_API_KEY', default=''),
+        'API_SECRET': env('CLOUDINARY_API_SECRET', default=''),
+        'SECURE': True,
+        # Preserve the existing model upload_to directory hierarchy exactly.
+        'PREFIX': '',
+    }
+    missing_cloudinary_settings = [
+        name
+        for name, value in {
+            'CLOUDINARY_CLOUD_NAME': CLOUDINARY_STORAGE['CLOUD_NAME'],
+            'CLOUDINARY_API_KEY': CLOUDINARY_STORAGE['API_KEY'],
+            'CLOUDINARY_API_SECRET': CLOUDINARY_STORAGE['API_SECRET'],
+        }.items()
+        if not value
+    ]
+    if missing_cloudinary_settings:
+        raise ImproperlyConfigured(
+            'Set the required backend-only Cloudinary environment variables: '
+            + ', '.join(missing_cloudinary_settings)
+        )
 
 DEFAULT_AUTO_FIELD = 'django_mongodb_backend.fields.ObjectIdAutoField'
 DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024

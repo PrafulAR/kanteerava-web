@@ -8,6 +8,10 @@ Phase 1 development foundation for the Scout Group public website and management
 - `backend/`: Django REST API project configured for MongoDB and development CORS.
 - The browser communicates with Django through the centralized client in `frontend/src/api/axios.ts`.
 
+The production target is Vercel for the frontend, a Render Web Service running
+Django through Gunicorn, a fresh MongoDB Atlas database, Cloudinary for durable
+uploaded media, and Brevo for transactional authentication email.
+
 Frontend composition is component-based:
 
 - `frontend/src/App.tsx` handles route selection, shared API state, and event callbacks.
@@ -46,9 +50,19 @@ MongoDB should be available at the `MONGODB_URI` configured in the backend envir
 
 Keep the local values above for development. Before deployment:
 
-- Set `DEBUG=False`, a unique long `SECRET_KEY`, the real comma-separated `ALLOWED_HOSTS`, and the HTTPS frontend origin in `CORS_ALLOWED_ORIGINS` (and `CSRF_TRUSTED_ORIGINS` if cookie/CSRF-protected endpoints are added).
+- Deploy `frontend/` to Vercel. Its `vercel.json` sends direct SPA route requests to `index.html`. Set only public browser values there: `VITE_API_URL=https://<render-domain>/api` and `VITE_GOOGLE_CLIENT_ID`.
+- Deploy `backend/` as a Render Web Service with `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`. Set `TRUST_X_FORWARDED_PROTO=True` only because Render controls the forwarded HTTPS protocol header.
+- Set `DEBUG=False`, a unique long `SECRET_KEY`, the real comma-separated `ALLOWED_HOSTS`, and the HTTPS Vercel origin in `CORS_ALLOWED_ORIGINS` (and `CSRF_TRUSTED_ORIGINS` if cookie/CSRF-protected endpoints are added).
 - Set `VITE_API_URL` to the public HTTPS API URL and register the production frontend origin for the Google web client ID. Never expose a Google client secret, Brevo key, database URI, or Django secret through a `VITE_` variable.
 - Enable `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, and `CSRF_COOKIE_SECURE` after HTTPS is terminated correctly. Enable HSTS gradually with `SECURE_HSTS_SECONDS`, then include subdomains/preload only after confirming every relevant host supports HTTPS.
-- Use a secured production MongoDB deployment with authentication, TLS, backups, and restricted network access.
-- Serve collected static files and uploaded media through a production web server or object-storage/CDN setup. Django serves uploaded media only while `DEBUG=True`.
+- Use a fresh, secured MongoDB Atlas database with authentication, TLS, backups, and restricted network access. Local `scout_group` data is not a production migration source.
+- Set `USE_CLOUDINARY=True` on Render and provide the backend-only `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and secret `CLOUDINARY_API_SECRET`. Existing `ImageField` and `FileField` uploads retain their current paths. In Cloudinary Security settings, enable **Allow delivery of PDF and ZIP files** before verifying Event circular and Newsroom attachment delivery.
+- Run `python manage.py collectstatic --noinput` during the Render build. WhiteNoise serves collected Django static assets only; Cloudinary serves user-uploaded images and PDFs. Render's ephemeral filesystem is not used for persistent media.
+- Keep `USE_CLOUDINARY=False` locally to retain `FileSystemStorage`, `MEDIA_ROOT`, `MEDIA_URL`, and the existing `DEBUG`-only development media route.
 - Configure the production Brevo sender, secret management, monitoring, and log retention outside source control. Run `python manage.py check --deploy`, the backend tests, and the frontend production build with the deployment environment before release.
+
+Before launch, perform one real Cloudinary image upload and delivery check, one
+real PDF upload and delivery check, and one delete check. Replacing or deleting
+a model file does not automatically guarantee deletion of the previous
+Cloudinary asset; orphan-media cleanup is a separate follow-up and is not part
+of this deployment-preparation stage.
