@@ -44,22 +44,80 @@ let googleInitializedClientId = ''
 let activeGoogleCredentialHandler: ((response: GoogleCredentialResponse) => void) | null = null
 
 function errorMessage(error: unknown) {
-  if (!isAxiosError(error) || !error.response?.data) return 'Unable to connect to the server. Please try again.'
-  const responseData = error.response.data
-  if (typeof responseData !== 'object' || responseData === null || Array.isArray(responseData)) {
+  if (!isAxiosError(error)) {
     return 'Unable to complete this request. Please try again.'
   }
-  const data = responseData as { message?: string; detail?: string; errors?: Record<string, string[] | string> } & Record<string, unknown>
-  if (typeof data.message === 'string') return data.message
-  if (typeof data.detail === 'string') return data.detail
-  if (data.errors) {
-    const [, value] = Object.entries(data.errors)[0] ?? []
-    if (value) return Array.isArray(value) ? value.join(' ') : String(value)
+
+  if (!error.response) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return 'The request timed out. Please try again.'
+    }
+    return 'Unable to connect to the server. Please try again.'
   }
-  const [field, value] = Object.entries(data).find(([key]) => !['success', 'message', 'errors'].includes(key)) ?? []
-  if (field && value) return `${field.replaceAll('_', ' ')}: ${Array.isArray(value) ? value.join(' ') : String(value)}`
-  return 'Unable to complete this request. Please check the form and try again.'
+
+  const { status, data: responseData } = error.response
+
+  if (typeof responseData === 'object' && responseData !== null && !Array.isArray(responseData)) {
+    const data = responseData as {
+      message?: string
+      detail?: string
+      errors?: Record<string, string[] | string>
+    } & Record<string, unknown>
+
+    if (typeof data.message === 'string') return data.message
+    if (typeof data.detail === 'string') return data.detail
+
+    if (data.errors) {
+      const [, value] = Object.entries(data.errors)[0] ?? []
+      if (value) return Array.isArray(value) ? value.join(' ') : String(value)
+    }
+
+    const [field, value] =
+      Object.entries(data).find(([key]) => !['success', 'message', 'errors'].includes(key)) ?? []
+
+    if (field && value) {
+      return `${field.replaceAll('_', ' ')}: ${
+        Array.isArray(value) ? value.join(' ') : String(value)
+      }`
+    }
+  }
+
+  if (status === 401) {
+    return 'Your authentication could not be verified. Please sign in again.'
+  }
+
+  if (status === 403) {
+    return "You don't have permission to access this area."
+  }
+
+  if (status === 429) {
+    return 'Too many attempts. Please try again later.'
+  }
+
+  if ([500, 502, 503, 504].includes(status)) {
+    return 'Service is temporarily unavailable. Please try again later.'
+  }
+
+  return 'Unable to complete this request. Please try again.'
 }
+
+// function errorMessage(error: unknown) {
+//   if (!isAxiosError(error) || !error.response?.data) return 'Unable to connect to the server. Please try again.'
+//   const responseData = error.response.data
+//   if (typeof responseData !== 'object' || responseData === null || Array.isArray(responseData)) {
+//     return 'Unable to complete this request. Please try again.'
+//   }
+//   const data = responseData as { message?: string; detail?: string; errors?: Record<string, string[] | string> } & Record<string, unknown>
+//   if (typeof data.message === 'string') return data.message
+//   if (typeof data.detail === 'string') return data.detail
+//   if (data.errors) {
+//     const [, value] = Object.entries(data.errors)[0] ?? []
+//     if (value) return Array.isArray(value) ? value.join(' ') : String(value)
+//   }
+//   const [field, value] = Object.entries(data).find(([key]) => !['success', 'message', 'errors'].includes(key)) ?? []
+//   if (field && value) return `${field.replaceAll('_', ' ')}: ${Array.isArray(value) ? value.join(' ') : String(value)}`
+//   return 'Unable to complete this request. Please check the form and try again.'
+// }
 
 export function AuthPanel({ onAuthenticated, adminOnly = false }: AuthPanelProps) {
   const [mode, setMode] = useState<AuthMode>('login')

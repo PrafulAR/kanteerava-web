@@ -309,21 +309,70 @@ function App() {
 }
 
 function authErrorMessage(error: unknown): string {
-  if (!isAxiosError(error) || !error.response?.data) return 'Unable to connect to the server. Please try again.'
-
-  const data = error.response.data
-  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+  if (!isAxiosError(error)) {
     return 'Unable to complete your request. Please try again.'
   }
-  if (typeof data.message === 'string') return data.message
-  if (typeof data.detail === 'string') return data.detail
 
-  const [field, messages] = Object.entries(data)[0] ?? []
-  if (field && messages) {
-    const message = Array.isArray(messages) ? messages.join(' ') : String(messages)
-    return `${field.replaceAll('_', ' ')}: ${message}`
+  if (!error.response) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return 'The request timed out. Please try again.'
+    }
+    return 'Unable to connect to the server. Please try again.'
   }
-  return 'Unable to complete your request. Please check the form and try again.'
+
+  const { status, data } = error.response
+
+  if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+    const responseData = data as {
+      message?: string
+      detail?: string
+    } & Record<string, unknown>
+
+    if (typeof responseData.message === 'string') return responseData.message
+    if (typeof responseData.detail === 'string') return responseData.detail
+
+    const [field, messages] = Object.entries(responseData)[0] ?? []
+
+    if (field && messages) {
+      const message = Array.isArray(messages) ? messages.join(' ') : String(messages)
+      return `${field.replaceAll('_', ' ')}: ${message}`
+    }
+  }
+
+  if (status === 401) {
+    return 'Your session has expired. Please sign in again.'
+  }
+
+  if (status === 403) {
+    return "You don't have permission to perform this action."
+  }
+
+  if (status === 429) {
+    return 'Too many attempts. Please try again later.'
+  }
+
+  if ([500, 502, 503, 504].includes(status)) {
+    return 'Service is temporarily unavailable. Please try again later.'
+  }
+
+  return 'Unable to complete your request. Please try again.'
 }
+// function authErrorMessage(error: unknown): string {
+//   if (!isAxiosError(error) || !error.response?.data) return 'Unable to connect to the server. Please try again.'
+
+//   const data = error.response.data
+//   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+//     return 'Unable to complete your request. Please try again.'
+//   }
+//   if (typeof data.message === 'string') return data.message
+//   if (typeof data.detail === 'string') return data.detail
+
+//   const [field, messages] = Object.entries(data)[0] ?? []
+//   if (field && messages) {
+//     const message = Array.isArray(messages) ? messages.join(' ') : String(messages)
+//     return `${field.replaceAll('_', ' ')}: ${message}`
+//   }
+//   return 'Unable to complete your request. Please check the form and try again.'
+// }
 
 export default App
