@@ -5,8 +5,16 @@ import guideActivityHero from '../../assets/hero-guide-activity.webp'
 import mountainGroupHero from '../../assets/hero-mountain-group.webp'
 import templeGroupHero from '../../assets/hero-temple-group.webp'
 
+export type HealthStatus = 'checking' | 'online' | 'offline'
+
 interface HeroProps {
-  status: string
+  status: HealthStatus
+}
+
+const healthStatusLabels: Record<HealthStatus, string> = {
+  checking: 'Backend status: checking',
+  online: 'Backend status: online',
+  offline: 'Backend status: unavailable',
 }
 
 const heroSlides = [
@@ -48,7 +56,7 @@ export function Hero({ status }: HeroProps) {
           <Link className="action-button" to="/programmes">Explore programmes</Link>
           <Link className="text-link" to="/about">Our story <span>↗</span></Link>
         </div>
-        <div className="api-status"><span className="dot" />{status}</div>
+        <div className={`api-status api-status-${status}`} role="status" aria-label={healthStatusLabels[status]} title={healthStatusLabels[status]}><span className="dot" aria-hidden="true" /></div>
       </div>
       <div className="hero-carousel-controls" aria-label="Choose hero photograph">{heroSlides.map((_, index) => <button type="button" className={index === activeSlide ? 'is-active' : ''} onClick={() => selectSlide(index)} aria-label={`Show photograph ${index + 1}`} aria-pressed={index === activeSlide} key={index}><span>{String(index + 1).padStart(2, '0')}</span><i aria-hidden="true" /></button>)}</div>
       <div className="hero-scroll">Scroll to explore <span>↓</span></div>

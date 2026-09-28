@@ -25,7 +25,7 @@ import { AchievementFeed } from './components/achievements/AchievementFeed'
 import { AchievementAdminPanel } from './components/achievements/AchievementAdminPanel'
 import { MembershipPanel, type MembershipApplication } from './components/membership/MembershipPanel'
 import type { SignaturePayload } from './components/membership/SignatureInput'
-import { Hero } from './components/public/Hero'
+import { Hero, type HealthStatus } from './components/public/Hero'
 import { SocialConnect } from './components/public/SocialConnect'
 import { SiteNav } from './components/navigation/SiteNav'
 import { ContextualBackButton } from './components/navigation/ContextualBackButton'
@@ -52,7 +52,7 @@ function App() {
   const isNewsroomAdmin = path === '/admin/newsroom'
   const eventDetailId = path.match(/^\/events\/([^/]+)\/?$/)?.[1]
   const announcementDetailId = path.match(/^\/announcements\/([^/]+)\/?$/)?.[1]
-  const [status, setStatus] = useState('Connecting to the Scout Group API...')
+  const [healthStatus, setHealthStatus] = useState<HealthStatus>('checking')
   const [user, setUser] = useState<AuthUser | null>(null)
   const [message, setMessage] = useState('')
   const [membership, setMembership] = useState<Membership | null>(null)
@@ -107,7 +107,7 @@ function App() {
   }
 
   useEffect(() => {
-    apiClient.get('/health/').then((response) => setStatus(response.data.message)).catch(() => setStatus('The API is unavailable. Start Django on port 8000.'))
+    apiClient.get('/health/').then((response) => setHealthStatus(response.data?.success === true ? 'online' : 'offline')).catch(() => setHealthStatus('offline'))
     getEvents().then((response) => setEvents(response.data.data)).catch(() => setEventsError(true)).finally(() => setEventsLoading(false))
     getAnnouncements().then((response) => setAnnouncements(response.data.data)).catch(() => setAnnouncementsError(true)).finally(() => setAnnouncementsLoading(false))
     getGalleryAlbums().then((response) => setGalleryAlbums(response.data.data)).catch(() => setGalleryError(true)).finally(() => setGalleryLoading(false))
@@ -285,7 +285,7 @@ function App() {
   return <main className="shell">
     <div className="utility"><span>XV KANTEERAVA OPEN UNIT</span><span>Adventure • Service • Community</span></div>
     {!isHome && <SiteNav user={user} internal onSignOut={signOut} />}
-    {isHome && <><section className="hero"><SiteNav user={user} onSignOut={signOut} /><Hero status={status} /></section></>}
+    {isHome && <><section className="hero"><SiteNav user={user} onSignOut={signOut} /><Hero status={healthStatus} /></section></>}
     {isHome && <HomeProgrammes />}
     {isHome && <RashtrapatiAwardShowcase />}
     {knownAdminRoute && <section className="admin-hero"><p className="kicker">XVK Scout Group</p><h1>Admin<br /><em>workspace.</em></h1><p>Manage memberships and the work behind the movement.</p></section>}

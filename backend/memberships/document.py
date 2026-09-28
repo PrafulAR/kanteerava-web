@@ -227,12 +227,12 @@ def build_official_pdf(membership):
     guardian_type = membership.get_guardian_type_display() if hasattr(membership, 'get_guardian_type_display') else ''
     fields = [
         ('Name of Applicant (In Block letters)', _membership_applicant_name(membership)),
-        ('Father’s / Guardian’s Name', membership.parent_or_guardian),
+        ('Father’s / Mother’s / Guardian’s Name', membership.parent_or_guardian),
         ('Date of Birth', membership.date_of_birth.strftime('%d/%m/%Y')),
         ('Residential Address', membership.address),
         ('Contact Number(s)', membership.contact_phone or membership.user.phone),
         ('Father/Mother/Guardian', ' / '.join(filter(None, [guardian_type, membership.emergency_contact_name, membership.emergency_contact_phone]))),
-        ('Pin Code', membership.postal_code),
+        ('PIN / Postal Code', membership.postal_code),
         ('E-mail Id', membership.user.email),
         ('Name of School/College', membership.school_college),
         ('Grade & Section', membership.grade_section),

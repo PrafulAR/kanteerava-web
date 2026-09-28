@@ -129,6 +129,21 @@ class MembershipApplicationValidationTests(SimpleTestCase):
             self.assertFalse(serializer.is_valid(), field)
             self.assertIn(field, serializer.errors)
 
+    def test_indian_and_international_postal_codes_are_accepted(self):
+        for postal_code in ('560018', 'SW1A 1AA', '10001-1234'):
+            payload = self.valid_payload()
+            payload['postal_code'] = postal_code
+            serializer = MembershipSerializer(data=payload)
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_invalid_postal_codes_are_rejected(self):
+        for postal_code in ('12', '-560018', 'SW1A_1AA', 'A' * 13):
+            payload = self.valid_payload()
+            payload['postal_code'] = postal_code
+            serializer = MembershipSerializer(data=payload)
+            self.assertFalse(serializer.is_valid(), postal_code)
+            self.assertIn('postal_code', serializer.errors)
+
     def test_preferred_patrol_is_not_part_of_active_application_api(self):
         self.assertNotIn('preferred_patrol', MembershipSerializer().fields)
 

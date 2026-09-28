@@ -57,10 +57,10 @@ class MembershipSerializer(serializers.ModelSerializer):
         if self.instance is None:
             required_fields = {
                 'applicant_name': 'Name of Applicant (In Block letters)',
-                'parent_or_guardian': 'Father’s / Guardian’s Name',
+                'parent_or_guardian': 'Father’s / Mother’s / Guardian’s Name',
                 'contact_phone': 'Contact Number(s)',
                 'guardian_type': 'Parent/Guardian Type',
-                'postal_code': 'Pin Code',
+                'postal_code': 'PIN / Postal Code',
                 'gender': 'Gender',
                 'school_college': 'Name of School/College',
                 'grade_section': 'Grade & Section',
@@ -75,8 +75,6 @@ class MembershipSerializer(serializers.ModelSerializer):
                 missing['photo_upload'] = 'Member Photo is required.'
             if attrs.get('fee_acknowledged') is not True:
                 missing['fee_acknowledged'] = 'Please acknowledge the membership fee declaration before submitting your application.'
-            if attrs.get('postal_code') and not re.fullmatch(r'\d{6}', str(attrs['postal_code'])):
-                missing['postal_code'] = 'Pin Code must contain exactly 6 digits.'
             if attrs.get('gender') and attrs['gender'] not in self.GENDER_VALUES:
                 missing['gender'] = 'Select a valid Gender.'
             if attrs.get('emergency_contact_relationship') and attrs['emergency_contact_relationship'] not in self.RELATIONSHIP_VALUES:
@@ -86,6 +84,11 @@ class MembershipSerializer(serializers.ModelSerializer):
         else:
             # The acknowledgement is an immutable submission-time record.
             attrs.pop('fee_acknowledged', None)
+        if 'postal_code' in attrs and str(attrs['postal_code']).strip():
+            postal_code = str(attrs['postal_code']).strip()
+            if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9 -]{1,10}[A-Za-z0-9]', postal_code):
+                raise serializers.ValidationError({'postal_code': 'Enter a valid PIN / Postal Code using 3 to 12 letters, numbers, spaces or hyphens.'})
+            attrs['postal_code'] = postal_code
         for field in ('contact_phone', 'emergency_contact_phone'):
             if field not in attrs:
                 continue
