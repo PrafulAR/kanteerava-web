@@ -10,6 +10,8 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.platypus import BaseDocTemplate, Flowable, Frame, PageTemplate
 
+from .rules import is_leader_or_life_member
+
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 ASSETS = Path(__file__).resolve().parent / 'assets'
@@ -209,7 +211,8 @@ def build_official_pdf(membership):
     """Generate a PDF from the approval snapshot; the caller stores these exact bytes."""
     if not BSG_EMBLEM.is_file() or not CREST.is_file():
         raise ValueError('The official document logos are unavailable.')
-    if not membership.applicant_signature or not membership.guardian_signature or not membership.admin_signature:
+    guardian_signature_required = not is_leader_or_life_member(getattr(membership, 'member_type', ''))
+    if not membership.applicant_signature or not membership.admin_signature or (guardian_signature_required and not membership.guardian_signature):
         raise ValueError('Applicant, parent/guardian, and authorized signatures are required.')
 
     stream = BytesIO()
@@ -225,13 +228,15 @@ def build_official_pdf(membership):
     ])
     submitted_on = timezone.localtime(membership.submitted_at).strftime('%d/%m/%Y') if membership.submitted_at else ''
     guardian_type = membership.get_guardian_type_display() if hasattr(membership, 'get_guardian_type_display') else ''
+    guardian_name = membership.parent_or_guardian or membership.emergency_contact_name
+    guardian_details = ' / '.join(filter(None, [guardian_type, guardian_name, membership.emergency_contact_phone]))
     fields = [
         ('Name of Applicant (In Block letters)', _membership_applicant_name(membership)),
         ('Father’s / Mother’s / Guardian’s Name', membership.parent_or_guardian),
         ('Date of Birth', membership.date_of_birth.strftime('%d/%m/%Y')),
         ('Residential Address', membership.address),
         ('Contact Number(s)', membership.contact_phone or membership.user.phone),
-        ('Father/Mother/Guardian', ' / '.join(filter(None, [guardian_type, membership.emergency_contact_name, membership.emergency_contact_phone]))),
+        ('Relationship / Name / Phone No.', guardian_details),
         ('PIN / Postal Code', membership.postal_code),
         ('E-mail Id', membership.user.email),
         ('Name of School/College', membership.school_college),

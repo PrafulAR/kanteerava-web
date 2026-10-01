@@ -76,10 +76,135 @@ class MembershipDocumentTests(SimpleTestCase):
 
 
 class PrivateImageValidationTests(SimpleTestCase):
-    def test_signature_is_normalized_to_png(self):
+    @staticmethod
+    def data_url(content, mime):
+        encoded = base64.b64encode(content).decode('ascii')
+        return f'data:{mime};base64,{encoded}'
+
+    @staticmethod
+    def image_bytes(image_format, size=(240, 320)):
+        output = BytesIO()
+        image = Image.new('RGB', size, 'navy')
+        if image_format == 'MPO':
+            second = Image.new('RGB', size, 'orange')
+            image.save(output, format='MPO', save_all=True, append_images=[second])
+        else:
+            image.save(output, format=image_format)
+        return output.getvalue()
+
+    def assert_normalized_jpeg(self, result, expected_size=(240, 320)):
+        with Image.open(BytesIO(result)) as normalized:
+            self.assertEqual(normalized.format, 'JPEG')
+            self.assertEqual(normalized.mode, 'RGB')
+            self.assertEqual(normalized.size, expected_size)
+
+    def test_applicant_guardian_and_drawn_signatures_still_normalize_to_png(self):
         encoded = base64.b64encode(signature_bytes()).decode('ascii')
-        result = normalize_image_upload(f'data:image/png;base64,{encoded}', 'signature.png', kind='signature')
-        self.assertTrue(result.startswith(b'\x89PNG'))
+        for filename in ('applicant.png', 'guardian.png', 'drawn-signature.png'):
+            with self.subTest(filename=filename):
+                result = normalize_image_upload(
+                    f'data:image/png;base64,{encoded}',
+                    filename,
+                    kind='signature',
+                )
+                self.assertTrue(result.startswith(b'\x89PNG'))
+
+    def test_jpeg_member_photo_is_accepted_and_normalized(self):
+        result = normalize_image_upload(
+            self.data_url(photo_bytes(), 'image/jpeg'),
+            'android-photo.jpg',
+            kind='photo',
+        )
+        self.assert_normalized_jpeg(result)
+
+    def test_png_member_photo_is_normalized_to_jpeg(self):
+        result = normalize_image_upload(
+            self.data_url(self.image_bytes('PNG'), 'image/png'),
+            'desktop-photo.png',
+            kind='photo',
+        )
+        self.assert_normalized_jpeg(result)
+
+    def test_heif_member_photo_is_normalized_to_jpeg(self):
+        content = self.image_bytes('HEIF')
+        for mime, filename in (
+            ('image/heic', 'iphone-photo.heic'),
+            ('image/heif', 'iphone-photo.heif'),
+        ):
+            with self.subTest(mime=mime, filename=filename):
+                result = normalize_image_upload(
+                    self.data_url(content, mime),
+                    filename,
+                    kind='photo',
+                )
+                self.assert_normalized_jpeg(result)
+
+    def test_mpo_member_photo_is_normalized_to_jpeg(self):
+        result = normalize_image_upload(
+            self.data_url(self.image_bytes('MPO'), 'image/jpeg'),
+            'iphone-photo.jpg',
+            kind='photo',
+        )
+        self.assert_normalized_jpeg(result)
+
+    def test_decoded_content_is_authoritative_when_iphone_metadata_differs(self):
+        result = normalize_image_upload(
+            self.data_url(photo_bytes(), 'image/heic'),
+            'iphone-photo.heic',
+            kind='photo',
+        )
+        self.assert_normalized_jpeg(result)
+
+    def test_member_photo_exif_orientation_is_applied(self):
+        output = BytesIO()
+        exif = Image.Exif()
+        exif[274] = 6
+        Image.new('RGB', (240, 320), 'white').save(output, 'JPEG', exif=exif)
+        result = normalize_image_upload(
+            self.data_url(output.getvalue(), 'image/jpeg'),
+            'rotated-photo.jpg',
+            kind='photo',
+        )
+        self.assert_normalized_jpeg(result, expected_size=(320, 240))
+
+    def test_corrupt_and_renamed_non_image_photos_are_rejected(self):
+        samples = (
+            (b'not-an-image', 'image/jpeg', 'photo.jpg'),
+            (b'broken-heif', 'image/heic', 'photo.heic'),
+        )
+        for content, mime, filename in samples:
+            with self.subTest(filename=filename), self.assertRaisesRegex(ValueError, 'Invalid photo image'):
+                normalize_image_upload(
+                    self.data_url(content, mime),
+                    filename,
+                    kind='photo',
+                )
+
+    def test_photo_over_five_megabytes_is_rejected_before_image_decode(self):
+        oversized = b'0' * 5_000_001
+        with self.assertRaisesRegex(ValueError, 'Photo image is too large'):
+            normalize_image_upload(
+                self.data_url(oversized, 'image/jpeg'),
+                'oversized.jpg',
+                kind='photo',
+            )
+
+    def test_too_small_and_too_large_photos_are_rejected(self):
+        for size in ((119, 120), (5001, 120)):
+            with self.subTest(size=size), self.assertRaisesRegex(ValueError, 'Photo dimensions'):
+                normalize_image_upload(
+                    self.data_url(self.image_bytes('PNG', size), 'image/png'),
+                    'photo.png',
+                    kind='photo',
+                )
+
+    def test_heif_is_not_accepted_for_signatures(self):
+        with self.assertRaisesRegex(ValueError, 'Signature must be a PNG or JPG'):
+            normalize_image_upload(
+                self.data_url(self.image_bytes('HEIF'), 'image/heic'),
+                'signature.heic',
+                kind='signature',
+            )
 
     def test_rejects_mismatched_extension(self):
         encoded = base64.b64encode(signature_bytes()).decode('ascii')
@@ -227,7 +352,7 @@ class MembershipApplicationValidationTests(SimpleTestCase):
 
 class ApprovalFlowTests(SimpleTestCase):
     def test_pdf_failure_does_not_save_approval(self):
-        member = sample_membership(status=Membership.Status.PENDING, pk='test-id', updated_at=timezone.now(), scout_id='', refresh_from_db=lambda: None)
+        member = sample_membership(member_type=Membership.MemberType.SCOUT, status=Membership.Status.PENDING, pk='test-id', updated_at=timezone.now(), scout_id='', refresh_from_db=lambda: None)
         admin = SimpleNamespace(role='ADMIN')
         with patch('memberships.services.normalize_image_upload', return_value=signature_bytes()), \
              patch('memberships.services.build_official_pdf', side_effect=RuntimeError('render failed')), \

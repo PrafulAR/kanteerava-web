@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { Link } from 'react-router-dom'
 import type { AdminSummary, Membership } from '../../api/membershipApi'
-import { WINGS, wingLabel } from '../../config/wings'
+import { isLeaderOrLifeMember, WINGS, wingLabel } from '../../config/wings'
 import { GENDERS, GUARDIAN_TYPES, RELATIONSHIPS } from '../../config/membership'
 import { formatDate } from '../../utils/date'
 import { SignatureInput, type SignaturePayload } from '../membership/SignatureInput'
@@ -108,6 +108,7 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
         application.status,
       ].some((value) => String(value ?? '').toLocaleLowerCase().includes(normalizedSearch)))
     : visibleApplications
+  const selectedGuardianSignatureRequired = selected ? !isLeaderOrLifeMember(selected.member_type) : true
 
   const selectApplication = (application: Membership) => {
     setSelected(application)
@@ -215,14 +216,14 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
       <h3>Membership applications</h3>
       {visibleApplications.length === 0 && <p className="membership-copy">No applications yet.</p>}
       {visibleApplications.length > 0 && filteredApplications.length === 0 && <p className="membership-copy">No applications match “{applicationSearch.trim()}”.</p>}
-      {filteredApplications.map((item) => <div className="review-row" data-wing={item.member_type} key={item.id}>
-        <span><strong>{item.applicant_name || item.user_name}</strong><small>{item.application_id} / <b className="wing-label">{wingLabel(item.member_type)}</b> / {item.status}</small></span>
-        <button className="review-action" type="button" onClick={() => selectApplication(item)}>View details</button>
-      </div>)}
-    </div>
-    {selected && <div className="application-review">
+      {filteredApplications.map((item) => <Fragment key={item.id}>
+        <div className="review-row" data-wing={item.member_type}>
+          <span><strong>{item.applicant_name || item.user_name}</strong><small>{item.application_id} / <b className="wing-label">{wingLabel(item.member_type)}</b> / {item.status}</small></span>
+          <button className="review-action" type="button" onClick={() => selectApplication(item)}>View details</button>
+        </div>
+        {selected?.id === item.id && <div className="application-review">
       <div className="review-header"><h3>{selected.application_id}</h3><button className="review-close" type="button" onClick={() => setSelected(null)}>Close</button></div>
-      <div className="membership-review-status"><span className={`status status-${selected.status.toLowerCase()}`}>{selected.status}</span>{selected.approved_at && <span>Approved on {formatDate(selected.approved_at)}</span>}{selected.status === 'PENDING' && <><span>Applicant Signature: {selected.applicant_signature_available ? 'Received' : 'Missing'}</span><span>Parent / Guardian Signature: {selected.guardian_signature_available ? 'Received' : 'Missing'}</span></>}</div>
+      <div className="membership-review-status"><span className={`status status-${selected.status.toLowerCase()}`}>{selected.status}</span>{selected.approved_at && <span>Approved on {formatDate(selected.approved_at)}</span>}{selected.status === 'PENDING' && <><span>Applicant Signature: {selected.applicant_signature_available ? 'Received' : 'Missing'}</span><span>Parent / Guardian Signature: {selectedGuardianSignatureRequired ? (selected.guardian_signature_available ? 'Received' : 'Missing') : 'Optional'}</span></>}</div>
       <div className="review-fields">
         <label className="review-field-wide">Name of Applicant (In Block letters)<input className="block-letter-input" disabled={selected.status !== 'PENDING'} value={(draft.applicant_name ?? selected.applicant_name) || selected.user_name} onChange={(event) => update('applicant_name', event.target.value)} /></label>
         <label>E-mail Id<input disabled value={selected.user_email} /></label>
@@ -233,7 +234,6 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
         <label>Gender<select disabled={selected.status !== 'PENDING'} value={draft.gender ?? selected.gender} onChange={(event) => update('gender', event.target.value)}><option value="">Select gender</option>{GENDERS.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
         <label>Residential Address<textarea disabled={selected.status !== 'PENDING'} value={draft.address ?? selected.address} onChange={(event) => update('address', event.target.value)} /></label>
         <label>Contact Number(s)<input disabled={selected.status !== 'PENDING'} value={draft.contact_phone ?? selected.contact_phone} onChange={(event) => update('contact_phone', event.target.value)} /></label>
-        <label>Father/Mother/Guardian<input disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_name ?? selected.emergency_contact_name} onChange={(event) => update('emergency_contact_name', event.target.value)} /></label>
         <label>Father/Mother/Guardian Contact Number<input disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_phone ?? selected.emergency_contact_phone} onChange={(event) => update('emergency_contact_phone', event.target.value)} /></label>
         <label>Relationship<select disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_relationship ?? selected.emergency_contact_relationship} onChange={(event) => update('emergency_contact_relationship', event.target.value)}><option value="">Select relationship</option>{RELATIONSHIPS.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
         <label>PIN / Postal Code<input disabled={selected.status !== 'PENDING'} value={draft.postal_code ?? selected.postal_code} onChange={(event) => update('postal_code', event.target.value)} /></label>
@@ -260,15 +260,17 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
         <p>Permanently remove this membership, its application, signatures, photo and approved document. The website account will remain active.</p>
         <button className="review-action danger" type="button" onClick={() => { setDeletionError(''); setDeletionOpen(true) }}>Delete Membership</button>
       </section>
-    </div>}
+        </div>}
+      </Fragment>)}
+    </div>
     {approvalOpen && selected && <div className="approval-modal-backdrop" role="presentation"><div ref={approvalDialogRef} className="approval-modal" role="dialog" aria-modal="true" aria-labelledby="approval-modal-title" tabIndex={-1}>
       <p className="kicker">Approve Membership</p><h2 id="approval-modal-title">Authorized approval</h2>
       <p><strong>Applicant:</strong> {selected.applicant_name || selected.user_name}<br /><strong>Application No:</strong> {selected.application_id}</p>
       <label className="field-label">Authorized Signature</label>
       <SignatureInput id="authorized-signature" value={authorizedSignature} onChange={setAuthorizedSignature} />
       {approvalError && <p className="signature-error" role="alert">{approvalError}</p>}
-      <div className="review-actions"><button className="review-action" type="button" disabled={approving} onClick={() => { setApprovalOpen(false); setAuthorizedSignature(null) }}>Cancel</button><button className="submit" type="button" disabled={!authorizedSignature || approving || !selected.applicant_signature_available || !selected.guardian_signature_available} onClick={confirmApproval}>{approving ? 'Creating official form…' : 'Approve Membership'}</button></div>
-      {(!selected.applicant_signature_available || !selected.guardian_signature_available) && <p className="signature-error">Both Applicant Signature and Parent / Guardian Signature are required before approval.</p>}
+      <div className="review-actions"><button className="review-action" type="button" disabled={approving} onClick={() => { setApprovalOpen(false); setAuthorizedSignature(null) }}>Cancel</button><button className="submit" type="button" disabled={!authorizedSignature || approving || !selected.applicant_signature_available || (selectedGuardianSignatureRequired && !selected.guardian_signature_available)} onClick={confirmApproval}>{approving ? 'Creating official form…' : 'Approve Membership'}</button></div>
+      {(!selected.applicant_signature_available || (selectedGuardianSignatureRequired && !selected.guardian_signature_available)) && <p className="signature-error">{selectedGuardianSignatureRequired ? 'Both Applicant Signature and Parent / Guardian Signature are required before approval.' : 'Applicant Signature is required before approval.'}</p>}
     </div></div>}
     {deletionOpen && selected && <div className="approval-modal-backdrop" role="presentation"><div ref={deletionDialogRef} className="approval-modal deletion-modal" role="dialog" aria-modal="true" aria-labelledby="delete-membership-title" tabIndex={-1}>
       <p className="kicker">Delete Membership</p><h2 id="delete-membership-title">Permanently delete this membership?</h2>

@@ -1,11 +1,13 @@
 import logging
 import secrets
 
+from accounts.models import User
 from django.db import IntegrityError
 from django.utils import timezone
 
 from .document import build_official_pdf
 from .models import Membership, RetiredApplicationNumber
+from .rules import is_leader_or_life_member
 from .uploads import normalize_image_upload
 
 
@@ -31,7 +33,6 @@ class MembershipService:
         'contact_phone': 'Contact Number(s)',
         'parent_or_guardian': 'Father’s / Mother’s / Guardian’s Name',
         'guardian_type': 'Parent/Guardian Type',
-        'emergency_contact_name': 'Father/Mother/Guardian',
         'emergency_contact_phone': 'Father/Mother/Guardian Contact Number',
         'emergency_contact_relationship': 'Relationship',
         'postal_code': 'PIN / Postal Code',
@@ -55,7 +56,7 @@ class MembershipService:
         raise ValueError('Unable to allocate a unique application number. Please try again.')
 
     @staticmethod
-    def _extract_private_images(values, *, require_signatures=False):
+    def _extract_private_images(values, *, require_signatures=False, require_guardian_signature=True):
         values = dict(values)
         signature_data = values.pop('applicant_signature_upload', '')
         signature_name = values.pop('applicant_signature_name', '')
@@ -70,7 +71,7 @@ class MembershipService:
             raise ValueError('Applicant Signature is required before submitting the application.')
         if guardian_signature_data:
             private['guardian_signature'] = normalize_image_upload(guardian_signature_data, guardian_signature_name, kind='signature')
-        elif require_signatures:
+        elif require_signatures and require_guardian_signature:
             raise ValueError('Parent / Guardian Signature is required before submitting the application.')
         if photo_data:
             private['member_photo'] = normalize_image_upload(photo_data, photo_name, kind='photo')
@@ -90,13 +91,20 @@ class MembershipService:
             raise ValueError('E-mail Id is required on the account.')
         if validated_data.get('fee_acknowledged') is not True:
             raise ValueError('Please acknowledge the membership fee declaration before submitting your application.')
+        leader_or_life_member = is_leader_or_life_member(validated_data.get('member_type'))
         for field, label in MembershipService.REQUIRED_APPLICATION_FIELDS.items():
+            if leader_or_life_member and field in {'school_college', 'grade_section'}:
+                continue
             value = validated_data.get(field)
             if value is None or (isinstance(value, str) and not value.strip()):
                 raise ValueError(f'{label} is required.')
         if validated_data['joining_date'] > timezone.localdate():
             raise ValueError('Joining Date cannot be in the future.')
-        values, private = MembershipService._extract_private_images(validated_data, require_signatures=True)
+        values, private = MembershipService._extract_private_images(
+            validated_data,
+            require_signatures=True,
+            require_guardian_signature=not leader_or_life_member,
+        )
         for _ in range(100):
             try:
                 return Membership.objects.create(
@@ -121,7 +129,7 @@ class MembershipService:
             raise ValueError('Only pending applications can be approved.')
         if not membership.applicant_signature:
             raise ValueError('The applicant must provide a signature before approval.')
-        if not membership.guardian_signature:
+        if not is_leader_or_life_member(membership.member_type) and not membership.guardian_signature:
             raise ValueError('The parent or guardian must provide a signature before approval.')
         authorized_signature = normalize_image_upload(signature_data, signature_name, kind='signature')
 
@@ -148,7 +156,7 @@ class MembershipService:
         if changed != 1:
             raise ValueError('The application changed during approval. Reload and try again.')
         membership.refresh_from_db()
-        if membership.user.role != membership.member_type:
+        if membership.user.role != User.Role.ADMIN and membership.user.role != membership.member_type:
             try:
                 membership.user.role = membership.member_type
                 membership.user.save(update_fields=['role', 'updated_at'])

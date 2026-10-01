@@ -63,6 +63,7 @@ export type MembershipApplicationInput = Pick<Membership, 'applicant_name' | 'me
 }
 
 export const getMemberships = () => apiClient.get<{ data: Membership[] }>('/memberships/')
+export const getMyMemberships = () => apiClient.get<{ data: Membership[] }>('/memberships/', { params: { mine: 1 } })
 export const getMembershipResources = () => apiClient.get<{ data: MembershipResource[] }>('/memberships/resources/')
 export const applyForMembership = (payload: MembershipApplicationInput) => apiClient.post<{ data: Membership }>('/memberships/apply/', payload)
 export const getAdminDashboard = () => apiClient.get<{ data: AdminSummary }>('/memberships/admin-dashboard/')

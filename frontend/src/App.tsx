@@ -4,7 +4,7 @@ import { isAxiosError } from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import apiClient from './api/axios'
 import { getCurrentUser, logout, type AuthUser, type LoginResponse } from './api/authApi'
-import { approveMembership, applyForMembership, deleteMembership, getMembershipPdf, getAdminDashboard, getMembershipResources, getMemberships, rejectMembership, updateMembership, type AdminSummary, type MemberType, type Membership, type MembershipResource } from './api/membershipApi'
+import { approveMembership, applyForMembership, deleteMembership, getMembershipPdf, getAdminDashboard, getMembershipResources, getMemberships, getMyMemberships, rejectMembership, updateMembership, type AdminSummary, type MemberType, type Membership, type MembershipResource } from './api/membershipApi'
 import { getEvents, type EventItem } from './api/eventApi'
 import { getAnnouncements, type AnnouncementItem } from './api/announcementApi'
 import { getGalleryAlbums, type GalleryAlbum } from './api/galleryApi'
@@ -88,7 +88,7 @@ function App() {
   const refreshEvents = async () => { const response = await getEvents(); setEvents(response.data.data) }
   const refreshAnnouncements = async () => { const response = await getAnnouncements(); setAnnouncements(response.data.data) }
   const refreshMembership = async () => {
-    const response = await getMemberships()
+    const response = await getMyMemberships()
     const currentMembership = response.data.data[0] ?? null
     setMembership(currentMembership)
     setMembershipResources([])
@@ -123,9 +123,8 @@ function App() {
         refreshAchievements().catch(() => undefined)
         refreshEvents().catch(() => undefined)
         refreshAnnouncements().catch(() => undefined)
-      } else {
-        refreshMembership().catch(() => setMembership(null))
       }
+      refreshMembership().catch(() => setMembership(null))
     }).catch(() => undefined)
   }, [])
 
@@ -143,9 +142,8 @@ function App() {
         refreshAchievements().catch(() => setMessage('Unable to load achievements.'))
         refreshEvents().catch(() => setMessage('Unable to load event management.'))
         refreshAnnouncements().catch(() => setMessage('Unable to load Newsroom management.'))
-      } else {
-        await refreshMembership().catch(() => setMembership(null))
       }
+      await refreshMembership().catch(() => setMembership(null))
       setMessage('Welcome back.')
       navigate(auth.user.is_admin ? '/admin' : '/')
     } catch (error) { setMessage(authErrorMessage(error)) }
@@ -193,6 +191,7 @@ function App() {
       setAdminApplications((current) => current.map((item) => item.id === id ? response.data.data : item))
       setAdminSummary((current) => current ? { ...current, pending_applications: Math.max(0, current.pending_applications - 1), total_members: current.total_members + 1 } : current)
       getAdminDashboard().then((dashboard) => setAdminSummary(dashboard.data.data)).catch(() => undefined)
+      await refreshMembership().catch(() => setMembership(null))
       return response.data.data
     } catch (error) { setMessage(authErrorMessage(error)); throw error }
   }
@@ -202,6 +201,7 @@ function App() {
       await rejectMembership(id, reason)
       setAdminApplications((current) => current.filter((item) => item.id !== id))
       setAdminSummary((current) => current ? { ...current, pending_applications: current.pending_applications - 1 } : current)
+      await refreshMembership().catch(() => setMembership(null))
     } catch (error) {
       setMessage(authErrorMessage(error))
       throw error
@@ -223,6 +223,7 @@ function App() {
       setAdminApplications((current) => current.filter((item) => item.id !== id))
       const dashboard = await getAdminDashboard()
       setAdminSummary(dashboard.data.data)
+      await refreshMembership().catch(() => setMembership(null))
       setMessage('Membership permanently deleted. The website account remains active and can reapply.')
     } catch (error) {
       setMessage(authErrorMessage(error))

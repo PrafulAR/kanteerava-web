@@ -21,3 +21,5 @@ export const wingLabel = (type: MemberType | string, plural = false) => {
   const wing = WINGS.find((item) => item.type === type)
   return plural ? wing?.plural ?? type : wing?.label ?? type
 }
+
+export const isLeaderOrLifeMember = (type: MemberType | string) => type === 'ALUMNI' || type === 'LEADER'

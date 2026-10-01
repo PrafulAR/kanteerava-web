@@ -123,7 +123,12 @@ class MembershipListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        memberships = Membership.objects.all() if is_admin(request.user) else Membership.objects.filter(user=request.user)
+        if request.query_params.get('mine') == '1':
+            memberships = Membership.objects.filter(user=request.user)
+        elif is_admin(request.user):
+            memberships = Membership.objects.all()
+        else:
+            memberships = Membership.objects.filter(user=request.user)
         return Response({'success': True, 'message': 'Memberships loaded.', 'data': MembershipSerializer(memberships, many=True).data})
 
 

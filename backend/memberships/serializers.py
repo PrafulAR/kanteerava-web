@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Membership
+from .rules import is_leader_or_life_member
 
 
 class MembershipSerializer(serializers.ModelSerializer):
@@ -23,6 +24,7 @@ class MembershipSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_phone = serializers.CharField(source='user.phone', read_only=True)
     member_id = serializers.SerializerMethodField()
+    emergency_contact_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
     applicant_signature_upload = serializers.CharField(write_only=True, required=False, allow_blank=True)
     applicant_signature_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     guardian_signature_upload = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -55,6 +57,7 @@ class MembershipSerializer(serializers.ModelSerializer):
         if 'applicant_name' in attrs and not str(attrs.get('applicant_name', '')).strip():
             raise serializers.ValidationError({'applicant_name': 'Name of Applicant (In Block letters) is required.'})
         if self.instance is None:
+            leader_or_life_member = is_leader_or_life_member(attrs.get('member_type'))
             required_fields = {
                 'applicant_name': 'Name of Applicant (In Block letters)',
                 'parent_or_guardian': 'Father’s / Mother’s / Guardian’s Name',
@@ -62,14 +65,17 @@ class MembershipSerializer(serializers.ModelSerializer):
                 'guardian_type': 'Parent/Guardian Type',
                 'postal_code': 'PIN / Postal Code',
                 'gender': 'Gender',
-                'school_college': 'Name of School/College',
-                'grade_section': 'Grade & Section',
                 'joining_date': 'Joining Date',
             }
+            if not leader_or_life_member:
+                required_fields.update({
+                    'school_college': 'Name of School/College',
+                    'grade_section': 'Grade & Section',
+                })
             missing = {field: f'{label} is required.' for field, label in required_fields.items() if not str(attrs.get(field, '')).strip()}
             if not attrs.get('applicant_signature_upload'):
                 missing['applicant_signature_upload'] = 'Applicant Signature is required.'
-            if not attrs.get('guardian_signature_upload'):
+            if not leader_or_life_member and not attrs.get('guardian_signature_upload'):
                 missing['guardian_signature_upload'] = 'Parent / Guardian Signature is required.'
             if not attrs.get('photo_upload'):
                 missing['photo_upload'] = 'Member Photo is required.'
