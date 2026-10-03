@@ -40,6 +40,7 @@ class Membership(models.Model):
     emergency_contact_relationship = models.CharField(max_length=80)
     parent_or_guardian = models.CharField(max_length=150, blank=True)
     guardian_type = models.CharField(max_length=10, choices=GuardianType.choices, blank=True, default='')
+    guardian_contact_phone = models.CharField(max_length=30, blank=True, default='')
     contact_phone = models.CharField(max_length=30, blank=True)
     postal_code = models.CharField(max_length=12, blank=True)
     school_college = models.CharField(max_length=200, blank=True)

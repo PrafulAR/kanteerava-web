@@ -35,7 +35,7 @@ import { AboutPage, ContactPage, HomeProgrammes, ProgrammesPage, RashtrapatiAwar
 import { PrivacyPolicyPage, TermsOfServicePage } from './pages/LegalPages'
 import './App.css'
 
-const newApplication = (applicantName = ''): MembershipApplication => ({ applicant_name: applicantName, member_type: '', date_of_birth: '', gender: '', address: '', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relationship: '', parent_or_guardian: '', guardian_type: '', contact_phone: '', postal_code: '', school_college: '', grade_section: '', hobbies: '', introduced_by: '', previous_experience: '', joining_date: todayInputValue(), is_existing_member: false, applicant_signature_upload: '', applicant_signature_name: '', guardian_signature_upload: '', guardian_signature_name: '', photo_upload: '', photo_name: '', fee_acknowledged: false })
+const newApplication = (applicantName = ''): MembershipApplication => ({ applicant_name: applicantName.toUpperCase(), member_type: '', date_of_birth: '', gender: '', address: '', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relationship: '', parent_or_guardian: '', guardian_type: '', guardian_contact_phone: '', contact_phone: '', postal_code: '', school_college: '', grade_section: '', hobbies: '', introduced_by: '', previous_experience: '', joining_date: todayInputValue(), is_existing_member: false, applicant_signature_upload: '', applicant_signature_name: '', guardian_signature_upload: '', guardian_signature_name: '', photo_upload: '', photo_name: '', fee_acknowledged: false })
 
 function App() {
   const location = useLocation()

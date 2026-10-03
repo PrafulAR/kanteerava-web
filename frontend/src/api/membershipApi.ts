@@ -24,6 +24,7 @@ export interface Membership {
   emergency_contact_relationship: string
   parent_or_guardian: string
   guardian_type: 'FATHER' | 'MOTHER' | 'GUARDIAN' | ''
+  guardian_contact_phone: string
   contact_phone: string
   postal_code: string
   school_college: string
@@ -51,7 +52,7 @@ export interface MembershipResource {
   action_label: string
 }
 
-export type MembershipApplicationInput = Pick<Membership, 'applicant_name' | 'member_type' | 'date_of_birth' | 'gender' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'parent_or_guardian' | 'guardian_type' | 'contact_phone' | 'postal_code' | 'school_college' | 'grade_section' | 'hobbies' | 'introduced_by' | 'previous_experience'> & {
+export type MembershipApplicationInput = Pick<Membership, 'applicant_name' | 'member_type' | 'date_of_birth' | 'gender' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'parent_or_guardian' | 'guardian_type' | 'guardian_contact_phone' | 'contact_phone' | 'postal_code' | 'school_college' | 'grade_section' | 'hobbies' | 'introduced_by' | 'previous_experience'> & {
   joining_date: string | null
   applicant_signature_upload: string
   applicant_signature_name: string

@@ -3,7 +3,7 @@ import { isAxiosError } from 'axios'
 import { Link } from 'react-router-dom'
 import type { AdminSummary, Membership } from '../../api/membershipApi'
 import { isLeaderOrLifeMember, WINGS, wingLabel } from '../../config/wings'
-import { GENDERS, GUARDIAN_TYPES, RELATIONSHIPS } from '../../config/membership'
+import { GENDERS, GUARDIAN_TYPES } from '../../config/membership'
 import { formatDate } from '../../utils/date'
 import { SignatureInput, type SignaturePayload } from '../membership/SignatureInput'
 
@@ -225,17 +225,21 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
       <div className="review-header"><h3>{selected.application_id}</h3><button className="review-close" type="button" onClick={() => setSelected(null)}>Close</button></div>
       <div className="membership-review-status"><span className={`status status-${selected.status.toLowerCase()}`}>{selected.status}</span>{selected.approved_at && <span>Approved on {formatDate(selected.approved_at)}</span>}{selected.status === 'PENDING' && <><span>Applicant Signature: {selected.applicant_signature_available ? 'Received' : 'Missing'}</span><span>Parent / Guardian Signature: {selectedGuardianSignatureRequired ? (selected.guardian_signature_available ? 'Received' : 'Missing') : 'Optional'}</span></>}</div>
       <div className="review-fields">
-        <label className="review-field-wide">Name of Applicant (In Block letters)<input className="block-letter-input" disabled={selected.status !== 'PENDING'} value={(draft.applicant_name ?? selected.applicant_name) || selected.user_name} onChange={(event) => update('applicant_name', event.target.value)} /></label>
+        <label className="review-field-wide">Name of Applicant (In Block letters)<input className="block-letter-input" disabled={selected.status !== 'PENDING'} value={(draft.applicant_name ?? selected.applicant_name) || selected.user_name} onChange={(event) => update('applicant_name', event.target.value.toUpperCase())} /></label>
         <label>E-mail Id<input disabled value={selected.user_email} /></label>
         <label>Wing / Section<select className="wing-select" data-wing={draft.member_type ?? selected.member_type} disabled={selected.status !== 'PENDING'} value={draft.member_type ?? selected.member_type} onChange={(event) => update('member_type', event.target.value)}>{WINGS.map((wing) => <option key={wing.type} value={wing.type}>{wing.label}</option>)}</select></label>
+        <strong>Guardian Information</strong>
         <label>Father’s / Mother’s / Guardian’s Name<input disabled={selected.status !== 'PENDING'} value={draft.parent_or_guardian ?? selected.parent_or_guardian} onChange={(event) => update('parent_or_guardian', event.target.value)} /></label>
         <label>Parent/Guardian Type<select disabled={selected.status !== 'PENDING'} value={draft.guardian_type ?? selected.guardian_type ?? ''} onChange={(event) => update('guardian_type', event.target.value)}><option value="">Not provided</option>{GUARDIAN_TYPES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+        <label>Father/Mother/Guardian Contact Number<input disabled={selected.status !== 'PENDING'} value={(draft.guardian_contact_phone ?? selected.guardian_contact_phone) || selected.emergency_contact_phone} onChange={(event) => update('guardian_contact_phone', event.target.value)} /></label>
+        <strong>Emergency Contact</strong>
+        <label>Emergency Contact Name<input disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_name ?? selected.emergency_contact_name} onChange={(event) => update('emergency_contact_name', event.target.value)} /></label>
+        <label>Emergency Contact Relationship<input disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_relationship ?? selected.emergency_contact_relationship} onChange={(event) => update('emergency_contact_relationship', event.target.value)} /></label>
+        <label>Emergency Contact Number<input disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_phone ?? selected.emergency_contact_phone} onChange={(event) => update('emergency_contact_phone', event.target.value)} /></label>
         <label>Date of Birth<input disabled={selected.status !== 'PENDING'} type="date" value={draft.date_of_birth ?? selected.date_of_birth} onChange={(event) => update('date_of_birth', event.target.value)} /></label>
         <label>Gender<select disabled={selected.status !== 'PENDING'} value={draft.gender ?? selected.gender} onChange={(event) => update('gender', event.target.value)}><option value="">Select gender</option>{GENDERS.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
         <label>Residential Address<textarea disabled={selected.status !== 'PENDING'} value={draft.address ?? selected.address} onChange={(event) => update('address', event.target.value)} /></label>
         <label>Contact Number(s)<input disabled={selected.status !== 'PENDING'} value={draft.contact_phone ?? selected.contact_phone} onChange={(event) => update('contact_phone', event.target.value)} /></label>
-        <label>Father/Mother/Guardian Contact Number<input disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_phone ?? selected.emergency_contact_phone} onChange={(event) => update('emergency_contact_phone', event.target.value)} /></label>
-        <label>Relationship<select disabled={selected.status !== 'PENDING'} value={draft.emergency_contact_relationship ?? selected.emergency_contact_relationship} onChange={(event) => update('emergency_contact_relationship', event.target.value)}><option value="">Select relationship</option>{RELATIONSHIPS.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
         <label>PIN / Postal Code<input disabled={selected.status !== 'PENDING'} value={draft.postal_code ?? selected.postal_code} onChange={(event) => update('postal_code', event.target.value)} /></label>
         <label>Name of School/College<input disabled={selected.status !== 'PENDING'} value={draft.school_college ?? selected.school_college} onChange={(event) => update('school_college', event.target.value)} /></label>
         <label>Grade &amp; Section<input disabled={selected.status !== 'PENDING'} value={draft.grade_section ?? selected.grade_section} onChange={(event) => update('grade_section', event.target.value)} /></label>

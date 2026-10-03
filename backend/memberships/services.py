@@ -33,8 +33,10 @@ class MembershipService:
         'contact_phone': 'Contact Number(s)',
         'parent_or_guardian': 'Father’s / Mother’s / Guardian’s Name',
         'guardian_type': 'Parent/Guardian Type',
-        'emergency_contact_phone': 'Father/Mother/Guardian Contact Number',
-        'emergency_contact_relationship': 'Relationship',
+        'guardian_contact_phone': 'Father/Mother/Guardian Contact Number',
+        'emergency_contact_name': 'Emergency Contact Name',
+        'emergency_contact_relationship': 'Emergency Contact Relationship',
+        'emergency_contact_phone': 'Emergency Contact Number',
         'postal_code': 'PIN / Postal Code',
         'gender': 'Gender',
         'school_college': 'Name of School/College',
@@ -81,6 +83,8 @@ class MembershipService:
 
     @staticmethod
     def submit(*, user, validated_data):
+        validated_data = dict(validated_data)
+        validated_data['applicant_name'] = str(validated_data.get('applicant_name', '')).strip().upper()
         active_application = Membership.objects.filter(
             user=user,
             status__in=[Membership.Status.PENDING, Membership.Status.APPROVED],
@@ -186,6 +190,19 @@ class MembershipService:
     def update_application(*, membership, validated_data):
         if membership.status != Membership.Status.PENDING:
             raise ValueError('Only pending applications can be corrected.')
+        validated_data = dict(validated_data)
+        if 'applicant_name' in validated_data:
+            validated_data['applicant_name'] = str(validated_data['applicant_name']).strip().upper()
+        for field in (
+            'parent_or_guardian',
+            'guardian_type',
+            'guardian_contact_phone',
+            'emergency_contact_name',
+            'emergency_contact_relationship',
+            'emergency_contact_phone',
+        ):
+            if field in validated_data and not str(validated_data[field]).strip():
+                raise ValueError(f'{MembershipService.REQUIRED_APPLICATION_FIELDS[field]} is required.')
         values, private = MembershipService._extract_private_images(validated_data)
         for field, value in {**values, **private}.items():
             setattr(membership, field, value)

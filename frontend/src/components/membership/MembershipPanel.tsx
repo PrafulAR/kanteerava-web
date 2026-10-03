@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { MemberType, Membership, MembershipResource } from '../../api/membershipApi'
@@ -11,7 +11,7 @@ import { BsgResources } from './BsgResources'
 export type MembershipApplication = {
   applicant_name: string; member_type: MemberType | ''; date_of_birth: string; gender: string; address: string
   emergency_contact_name: string; emergency_contact_phone: string; emergency_contact_relationship: string
-  parent_or_guardian: string; guardian_type: 'FATHER' | 'MOTHER' | 'GUARDIAN' | ''; contact_phone: string; postal_code: string
+  parent_or_guardian: string; guardian_type: 'FATHER' | 'MOTHER' | 'GUARDIAN' | ''; guardian_contact_phone: string; contact_phone: string; postal_code: string
   school_college: string; grade_section: string; hobbies: string; introduced_by: string
   previous_experience: string; joining_date: string; is_existing_member: boolean
   applicant_signature_upload: string; applicant_signature_name: string
@@ -39,11 +39,69 @@ export function MembershipPanel(props: MembershipPanelProps) {
   const [signatureError, setSignatureError] = useState('')
   const [savingSignature, setSavingSignature] = useState(false)
   const [acknowledgementError, setAcknowledgementError] = useState('')
+  const [emergencySameAsGuardian, setEmergencySameAsGuardian] = useState(false)
+  const [customEmergencyRelationship, setCustomEmergencyRelationship] = useState(false)
+  const preservedEmergencyContact = useRef<{
+    name: string
+    relationship: string
+    phone: string
+  } | null>(null)
   const leaderOrLifeMemberApplication = isLeaderOrLifeMember(application.member_type)
   const guardianSignatureRequired = !leaderOrLifeMemberApplication
   const missingRequiredUploads = !application.photo_upload || !application.applicant_signature_upload || (guardianSignatureRequired && !application.guardian_signature_upload)
   const pendingGuardianSignatureRequired = membership ? !isLeaderOrLifeMember(membership.member_type) : true
   const pendingRequiredSignatureMissing = Boolean(membership && (!membership.applicant_signature_available || (pendingGuardianSignatureRequired && !membership.guardian_signature_available)))
+  const guardianRelationship = GUARDIAN_TYPES.find((item) => item.value === application.guardian_type)?.label ?? ''
+  const standardRelationship = RELATIONSHIPS.some((item) => item !== 'Other' && item === application.emergency_contact_relationship)
+  const showingCustomRelationship = customEmergencyRelationship || Boolean(application.emergency_contact_relationship && !standardRelationship)
+
+  const openApplication = () => {
+    setEmergencySameAsGuardian(false)
+    setCustomEmergencyRelationship(false)
+    preservedEmergencyContact.current = null
+    onOpenApplication()
+  }
+
+  const updateGuardian = (
+    field: 'parent_or_guardian' | 'guardian_type' | 'guardian_contact_phone',
+    value: string,
+  ) => {
+    onUpdateApplication(field, value)
+    if (!emergencySameAsGuardian) return
+    if (field === 'parent_or_guardian') onUpdateApplication('emergency_contact_name', value)
+    if (field === 'guardian_type') {
+      const relationship = GUARDIAN_TYPES.find((item) => item.value === value)?.label ?? ''
+      onUpdateApplication('emergency_contact_relationship', relationship)
+    }
+    if (field === 'guardian_contact_phone') onUpdateApplication('emergency_contact_phone', value)
+  }
+
+  const toggleEmergencySameAsGuardian = (checked: boolean) => {
+    setEmergencySameAsGuardian(checked)
+    if (checked) {
+      preservedEmergencyContact.current = {
+        name: application.emergency_contact_name,
+        relationship: application.emergency_contact_relationship,
+        phone: application.emergency_contact_phone,
+      }
+      setCustomEmergencyRelationship(false)
+      onUpdateApplication('emergency_contact_name', application.parent_or_guardian)
+      onUpdateApplication('emergency_contact_relationship', guardianRelationship)
+      onUpdateApplication('emergency_contact_phone', application.guardian_contact_phone)
+      return
+    }
+    const preserved = preservedEmergencyContact.current
+    preservedEmergencyContact.current = null
+    if (preserved && Object.values(preserved).some(Boolean)) {
+      onUpdateApplication('emergency_contact_name', preserved.name)
+      onUpdateApplication('emergency_contact_relationship', preserved.relationship)
+      onUpdateApplication('emergency_contact_phone', preserved.phone)
+      setCustomEmergencyRelationship(Boolean(
+        preserved.relationship
+        && !RELATIONSHIPS.some((item) => item !== 'Other' && item === preserved.relationship),
+      ))
+    }
+  }
 
   const submitApplication = (event: FormEvent) => {
     if (!application.fee_acknowledged) {
@@ -90,12 +148,12 @@ export function MembershipPanel(props: MembershipPanelProps) {
     <section className="member-panel">
       <div className="panel-heading"><p className="kicker">Your place in the group</p><h2>Membership</h2></div>
       {message && <p className="form-message" role="status">{message}</p>}
-      {!membership && <><p className="membership-copy">You have an account, but no active Scout or Guide membership yet.</p><button className="submit" type="button" onClick={onOpenApplication}>Apply for membership</button></>}
+      {!membership && <><p className="membership-copy">You have an account, but no active Scout or Guide membership yet.</p><button className="submit" type="button" onClick={openApplication}>Apply for membership</button></>}
       {membership && <div className="membership-status" data-wing={membership.member_type}>
         <strong>{membership.application_id}</strong>
         <span className="wing-badge" data-wing={membership.member_type}>{wingLabel(membership.member_type)}</span>
         <span className={`status status-${membership.status.toLowerCase()}`}>{membership.status}</span>
-        {membership.status === 'REJECTED' && <><p>{membership.rejection_reason || 'Your application was not approved.'} You can submit a new application when you are ready.</p><button className="submit" type="button" onClick={onOpenApplication}>Reapply for membership</button></>}
+        {membership.status === 'REJECTED' && <><p>{membership.rejection_reason || 'Your application was not approved.'} You can submit a new application when you are ready.</p><button className="submit" type="button" onClick={openApplication}>Reapply for membership</button></>}
         {membership.status === 'PENDING' && <><p>Your application is currently under review. The official membership form will be available only after approval.</p>{pendingRequiredSignatureMissing && <div className="membership-pending-signature"><p>{pendingGuardianSignatureRequired ? 'Your application needs both required signatures before it can be approved.' : 'Your application needs the required applicant signature before it can be approved.'}</p>{!membership.applicant_signature_available && <div className="pending-signature-block"><h3>Applicant Signature <RequiredMark /></h3><SignatureInput id="pending-applicant-signature" value={pendingApplicantSignature} onChange={setPendingApplicantSignature} /></div>}{pendingGuardianSignatureRequired && !membership.guardian_signature_available && <div className="pending-signature-block"><h3>Parent / Guardian Signature <RequiredMark /></h3><SignatureInput id="pending-guardian-signature" value={pendingGuardianSignature} onChange={setPendingGuardianSignature} /></div>}{signatureError && <p className="signature-error" role="alert">{signatureError}</p>}<button className="review-action" type="button" disabled={(!pendingApplicantSignature && !pendingGuardianSignature) || savingSignature} onClick={savePendingSignature}>{savingSignature ? 'Saving…' : 'Save Signatures'}</button></div>}</>}
         {membership.status === 'APPROVED' && <><p>You are now an active {wingLabel(membership.member_type)}. {membership.approved_at && `Approved on ${formatDate(membership.approved_at)}.`}</p>{membership.pdf_available && <div className="membership-document-actions"><span>Membership Application</span><button className="review-action wing-action" type="button" onClick={() => onView(membership.id)}>View Membership Form</button><button className="review-action wing-action" type="button" onClick={() => onDownload(membership.id)}>Download PDF</button></div>}</>}
       </div>}
@@ -104,7 +162,7 @@ export function MembershipPanel(props: MembershipPanelProps) {
       <div className="panel-heading"><p className="kicker">New joinee application</p><h2>Tell us about you</h2></div>
       <form onSubmit={submitApplication}>
         <p className="required-fields-note"><RequiredMark /> Required fields</p>
-        <label className="application-field application-field-wide"><span>Name of Applicant (In Block letters) <RequiredMark /></span><input className="block-letter-input" autoComplete="name" value={application.applicant_name} onChange={(event) => onUpdateApplication('applicant_name', event.target.value)} required /></label>
+        <label className="application-field application-field-wide"><span>Name of Applicant (In Block letters) <RequiredMark /></span><input className="block-letter-input" autoComplete="name" value={application.applicant_name} onChange={(event) => onUpdateApplication('applicant_name', event.target.value.toUpperCase())} required /></label>
         <label className="application-field application-field-wide"><span>E-mail Id <RequiredMark /></span><input type="email" value={applicantEmail} readOnly required /></label>
         <div className="application-wing-helper"><Link to="/contact#scouting-journey" state={{ contextualBack: { label: 'Back to Membership Application', to: '/join' } }}>Not sure which section is right for you? See the Scouting Journey →</Link></div>
         <fieldset className="application-wing-picker application-field-wide">
@@ -115,15 +173,33 @@ export function MembershipPanel(props: MembershipPanelProps) {
         </fieldset>
         <label className="application-field"><span>Date of Birth <RequiredMark /></span><input required type="date" max={todayInputValue()} value={application.date_of_birth} onChange={(event) => onUpdateApplication('date_of_birth', event.target.value)} /></label>
         <label className="application-field"><span>Gender <RequiredMark /></span><select required value={application.gender} onChange={(event) => onUpdateApplication('gender', event.target.value)}><option value="" disabled>Select gender</option>{GENDERS.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
-        <label className="application-field"><span>Father’s / Mother’s / Guardian’s Name <RequiredMark /></span><input required value={application.parent_or_guardian} onChange={(event) => onUpdateApplication('parent_or_guardian', event.target.value)} /></label>
-        <label className="application-field"><span>Parent/Guardian Type <RequiredMark /></span><select required value={application.guardian_type} onChange={(event) => onUpdateApplication('guardian_type', event.target.value)}><option value="" disabled>Select parent/guardian type</option>{GUARDIAN_TYPES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
-        <label className="application-field application-field-wide"><span>Residential Address <RequiredMark /></span><textarea required value={application.address} onChange={(event) => onUpdateApplication('address', event.target.value)} /></label>
         <label className="application-field"><span>Contact Number(s) <RequiredMark /></span><input required type="tel" inputMode="tel" pattern={'(?=(?:\\D*\\d){7,15}\\D*$)[0-9+\\(\\) \\-]{7,30}'} title="Enter a valid phone number containing 7 to 15 digits" value={application.contact_phone} onChange={(event) => onUpdateApplication('contact_phone', event.target.value)} /></label>
+        <label className="application-field application-field-wide"><span>Residential Address <RequiredMark /></span><textarea required value={application.address} onChange={(event) => onUpdateApplication('address', event.target.value)} /></label>
         <label className="application-field"><span>PIN / Postal Code <RequiredMark /></span><input required autoComplete="postal-code" minLength={3} maxLength={12} pattern={'[A-Za-z0-9][A-Za-z0-9 \\x2D]{1,10}[A-Za-z0-9]'} title="Enter 3 to 12 letters, numbers, spaces or hyphens" value={application.postal_code} onChange={(event) => onUpdateApplication('postal_code', event.target.value)} /></label>
-        <label className="application-field"><span>Father/Mother/Guardian Contact Number <RequiredMark /></span><input required type="tel" inputMode="tel" pattern={'(?=(?:\\D*\\d){7,15}\\D*$)[0-9+\\(\\) \\-]{7,30}'} title="Enter a valid phone number containing 7 to 15 digits" value={application.emergency_contact_phone} onChange={(event) => onUpdateApplication('emergency_contact_phone', event.target.value)} /></label>
-        <label className="application-field"><span>Relationship <RequiredMark /></span><select required value={application.emergency_contact_relationship} onChange={(event) => onUpdateApplication('emergency_contact_relationship', event.target.value)}><option value="" disabled>Select relationship</option>{RELATIONSHIPS.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
-        <label className="application-field"><span>Name of School/College {!leaderOrLifeMemberApplication && <RequiredMark />}</span><input required={!leaderOrLifeMemberApplication} value={application.school_college} onChange={(event) => onUpdateApplication('school_college', event.target.value)} /></label>
-        <label className="application-field"><span>Grade &amp; Section {!leaderOrLifeMemberApplication && <RequiredMark />}</span><input required={!leaderOrLifeMemberApplication} value={application.grade_section} onChange={(event) => onUpdateApplication('grade_section', event.target.value)} /></label>
+        <div className="application-field-pair application-field-wide">
+          <label className="application-field"><span>Name of School/College {!leaderOrLifeMemberApplication && <RequiredMark />}</span><input required={!leaderOrLifeMemberApplication} value={application.school_college} onChange={(event) => onUpdateApplication('school_college', event.target.value)} /></label>
+          <label className="application-field"><span>Grade &amp; Section {!leaderOrLifeMemberApplication && <RequiredMark />}</span><input required={!leaderOrLifeMemberApplication} value={application.grade_section} onChange={(event) => onUpdateApplication('grade_section', event.target.value)} /></label>
+        </div>
+        <h3 className="application-section-heading application-field-wide">Guardian Information</h3>
+        <label className="application-field"><span>Father’s / Mother’s / Guardian’s Name <RequiredMark /></span><input required value={application.parent_or_guardian} onChange={(event) => updateGuardian('parent_or_guardian', event.target.value)} /></label>
+        <label className="application-field"><span>Parent/Guardian Type <RequiredMark /></span><select required value={application.guardian_type} onChange={(event) => updateGuardian('guardian_type', event.target.value)}><option value="" disabled>Select parent/guardian type</option>{GUARDIAN_TYPES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+        <label className="application-field"><span>Father/Mother/Guardian Contact Number <RequiredMark /></span><input required type="tel" inputMode="tel" pattern={'(?=(?:\\D*\\d){7,15}\\D*$)[0-9+\\(\\) \\-]{7,30}'} title="Enter a valid phone number containing 7 to 15 digits" value={application.guardian_contact_phone} onChange={(event) => updateGuardian('guardian_contact_phone', event.target.value)} /></label>
+        <h3 className="application-section-heading application-field-wide">Emergency Contact</h3>
+        <label className="application-same-contact application-field-wide"><input type="checkbox" checked={emergencySameAsGuardian} onChange={(event) => toggleEmergencySameAsGuardian(event.target.checked)} /><span>Emergency contact same as above</span></label>
+        <label className="application-field"><span>Emergency Contact Name <RequiredMark /></span><input required readOnly={emergencySameAsGuardian} value={application.emergency_contact_name} onChange={(event) => onUpdateApplication('emergency_contact_name', event.target.value)} /></label>
+        <label className="application-field"><span>Emergency Contact Relationship <RequiredMark /></span>{emergencySameAsGuardian
+          ? <input required readOnly value={application.emergency_contact_relationship} />
+          : <><select required value={showingCustomRelationship ? 'Other' : application.emergency_contact_relationship} onChange={(event) => {
+            if (event.target.value === 'Other') {
+              setCustomEmergencyRelationship(true)
+              onUpdateApplication('emergency_contact_relationship', '')
+            } else {
+              setCustomEmergencyRelationship(false)
+              onUpdateApplication('emergency_contact_relationship', event.target.value)
+            }
+          }}><option value="" disabled>Select relationship</option>{RELATIONSHIPS.map((item) => <option value={item} key={item}>{item}</option>)}</select>{showingCustomRelationship && <input required aria-label="Custom emergency contact relationship" placeholder="Enter relationship" value={application.emergency_contact_relationship} onChange={(event) => onUpdateApplication('emergency_contact_relationship', event.target.value)} />}</>}
+        </label>
+        <label className="application-field"><span>Emergency Contact Number <RequiredMark /></span><input required readOnly={emergencySameAsGuardian} type="tel" inputMode="tel" pattern={'(?=(?:\\D*\\d){7,15}\\D*$)[0-9+\\(\\) \\-]{7,30}'} title="Enter a valid phone number containing 7 to 15 digits" value={application.emergency_contact_phone} onChange={(event) => onUpdateApplication('emergency_contact_phone', event.target.value)} /></label>
         <label className="application-field application-field-wide"><span>Hobbies</span><textarea value={application.hobbies} onChange={(event) => onUpdateApplication('hobbies', event.target.value)} /></label>
         <label className="application-field"><span>Introduced By</span><input value={application.introduced_by} onChange={(event) => onUpdateApplication('introduced_by', event.target.value)} /></label>
         <label className="application-field"><span>Date</span><input type="text" value={formatDate(todayInputValue())} readOnly /></label>

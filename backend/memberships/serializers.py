@@ -9,7 +9,6 @@ from .rules import is_leader_or_life_member
 
 class MembershipSerializer(serializers.ModelSerializer):
     GENDER_VALUES = {'Male', 'Female', 'Other', 'Prefer not to say'}
-    RELATIONSHIP_VALUES = {'Parent', 'Legal Guardian', 'Grandparent', 'Sibling', 'Relative', 'Other'}
     TEXT_LIMITS = {
         'address': 1000,
         'hobbies': 1000,
@@ -35,7 +34,7 @@ class MembershipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Membership
-        fields = ['id', 'application_id', 'member_id', 'pdf_available', 'applicant_signature_available', 'guardian_signature_available', 'user_name', 'user_email', 'user_phone', 'applicant_name', 'member_type', 'status', 'scout_id', 'date_of_birth', 'gender', 'address', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'parent_or_guardian', 'guardian_type', 'contact_phone', 'postal_code', 'school_college', 'grade_section', 'hobbies', 'introduced_by', 'previous_experience', 'joining_date', 'rejection_reason', 'submitted_at', 'approved_at', 'fee_acknowledged', 'applicant_signature_upload', 'applicant_signature_name', 'guardian_signature_upload', 'guardian_signature_name', 'photo_upload', 'photo_name']
+        fields = ['id', 'application_id', 'member_id', 'pdf_available', 'applicant_signature_available', 'guardian_signature_available', 'user_name', 'user_email', 'user_phone', 'applicant_name', 'member_type', 'status', 'scout_id', 'date_of_birth', 'gender', 'address', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'parent_or_guardian', 'guardian_type', 'guardian_contact_phone', 'contact_phone', 'postal_code', 'school_college', 'grade_section', 'hobbies', 'introduced_by', 'previous_experience', 'joining_date', 'rejection_reason', 'submitted_at', 'approved_at', 'fee_acknowledged', 'applicant_signature_upload', 'applicant_signature_name', 'guardian_signature_upload', 'guardian_signature_name', 'photo_upload', 'photo_name']
         read_only_fields = ['id', 'application_id', 'member_id', 'pdf_available', 'applicant_signature_available', 'guardian_signature_available', 'user_name', 'user_email', 'user_phone', 'status', 'scout_id', 'rejection_reason', 'submitted_at', 'approved_at']
 
     def get_pdf_available(self, obj):
@@ -54,8 +53,33 @@ class MembershipSerializer(serializers.ModelSerializer):
         return obj.scout_id or obj.application_id
 
     def validate(self, attrs):
-        if 'applicant_name' in attrs and not str(attrs.get('applicant_name', '')).strip():
-            raise serializers.ValidationError({'applicant_name': 'Name of Applicant (In Block letters) is required.'})
+        if 'applicant_name' in attrs:
+            applicant_name = str(attrs.get('applicant_name', '')).strip()
+            if not applicant_name:
+                raise serializers.ValidationError({'applicant_name': 'Name of Applicant (In Block letters) is required.'})
+            attrs['applicant_name'] = applicant_name.upper()
+        if 'emergency_contact_relationship' in attrs:
+            relationship = str(attrs.get('emergency_contact_relationship', '')).strip()
+            if relationship.casefold() == 'other':
+                raise serializers.ValidationError({
+                    'emergency_contact_relationship': 'Enter the specific emergency contact relationship.',
+                })
+            attrs['emergency_contact_relationship'] = relationship
+        required_contact_fields = {
+            'parent_or_guardian': 'Father’s / Mother’s / Guardian’s Name',
+            'guardian_type': 'Parent/Guardian Type',
+            'guardian_contact_phone': 'Father/Mother/Guardian Contact Number',
+            'emergency_contact_name': 'Emergency Contact Name',
+            'emergency_contact_relationship': 'Emergency Contact Relationship',
+            'emergency_contact_phone': 'Emergency Contact Number',
+        }
+        blank_contact_fields = {
+            field: f'{label} is required.'
+            for field, label in required_contact_fields.items()
+            if field in attrs and not str(attrs.get(field, '')).strip()
+        }
+        if blank_contact_fields:
+            raise serializers.ValidationError(blank_contact_fields)
         if self.instance is None:
             leader_or_life_member = is_leader_or_life_member(attrs.get('member_type'))
             required_fields = {
@@ -63,6 +87,10 @@ class MembershipSerializer(serializers.ModelSerializer):
                 'parent_or_guardian': 'Father’s / Mother’s / Guardian’s Name',
                 'contact_phone': 'Contact Number(s)',
                 'guardian_type': 'Parent/Guardian Type',
+                'guardian_contact_phone': 'Father/Mother/Guardian Contact Number',
+                'emergency_contact_name': 'Emergency Contact Name',
+                'emergency_contact_relationship': 'Emergency Contact Relationship',
+                'emergency_contact_phone': 'Emergency Contact Number',
                 'postal_code': 'PIN / Postal Code',
                 'gender': 'Gender',
                 'joining_date': 'Joining Date',
@@ -83,8 +111,6 @@ class MembershipSerializer(serializers.ModelSerializer):
                 missing['fee_acknowledged'] = 'Please acknowledge the membership fee declaration before submitting your application.'
             if attrs.get('gender') and attrs['gender'] not in self.GENDER_VALUES:
                 missing['gender'] = 'Select a valid Gender.'
-            if attrs.get('emergency_contact_relationship') and attrs['emergency_contact_relationship'] not in self.RELATIONSHIP_VALUES:
-                missing['emergency_contact_relationship'] = 'Select a valid Relationship.'
             if missing:
                 raise serializers.ValidationError(missing)
         else:
@@ -95,7 +121,7 @@ class MembershipSerializer(serializers.ModelSerializer):
             if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9 -]{1,10}[A-Za-z0-9]', postal_code):
                 raise serializers.ValidationError({'postal_code': 'Enter a valid PIN / Postal Code using 3 to 12 letters, numbers, spaces or hyphens.'})
             attrs['postal_code'] = postal_code
-        for field in ('contact_phone', 'emergency_contact_phone'):
+        for field in ('contact_phone', 'guardian_contact_phone', 'emergency_contact_phone'):
             if field not in attrs:
                 continue
             value = str(attrs[field]).strip()

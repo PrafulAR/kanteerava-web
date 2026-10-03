@@ -661,9 +661,13 @@ input::placeholder,textarea::placeholder { color: #647785; opacity: 1; }
 .application-wing-helper a:hover { text-decoration: underline; text-underline-offset: 4px; }
 .application-field { display: flex; min-width: 0; flex-direction: column; gap: 7px; color: #354e60; font: 600 12px/1.45 'IBM Plex Mono',monospace; letter-spacing: .04em; }
 .application-field-wide { grid-column: 1 / -1; }
+.application-field-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
 .application-field input,.application-field select,.application-field textarea { box-sizing: border-box; width: 100%; }
 .application-field textarea { min-height: 88px; resize: vertical; }
 .application-field input[readonly] { color: #526675; background: #f2f1eb; }
+.application-section-heading { margin: 15px 0 1px; padding-top: 14px; border-top: 1px solid #d7d6cc; color: #172635; font: 400 23px/1.2 Georgia,serif; }
+.application-same-contact { display: flex; align-items: center; gap: 10px; padding: 5px 0 3px; color: #354e60; font: 600 13px/1.45 'IBM Plex Mono',monospace; }
+.application-same-contact input { width: 18px; height: 18px; flex: 0 0 auto; padding: 0; accent-color: #db642e; }
 .application-wing-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
 .application-wing-picker legend { margin-bottom: 9px; color: #354e60; font: 600 12px/1.45 'IBM Plex Mono',monospace; letter-spacing: .04em; }
 .application-wing-options { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 9px; }
@@ -716,6 +720,7 @@ input::placeholder,textarea::placeholder { color: #647785; opacity: 1; }
 .deletion-target strong { color: #172635; font: 20px Georgia,serif; }
 .deletion-target span { color: #8b2c20; font: 600 11px 'IBM Plex Mono',monospace; overflow-wrap: anywhere; }
 @media(max-width:700px){.required-fields-note,.application-wing-helper,.application-field-wide,.application-upload-field,.application-signature-field{grid-column:auto}.application-wing-helper a{font-size:12px}.approval-modal-backdrop{grid-template-columns:minmax(0,1fr)}.approval-modal{box-sizing:border-box;width:100%;min-width:0;max-width:100%}.approval-modal .review-actions{flex-direction:column}.approval-modal .review-actions>*{width:100%}.application-review{min-width:0}.review-header{align-items:flex-start;flex-direction:column;gap:12px}.review-header h3{max-width:100%;overflow-wrap:anywhere}.review-fields{grid-template-columns:1fr}.review-fields,.review-fields>*,.review-fields input,.review-fields select,.review-fields textarea{min-width:0;max-width:100%}.auth-tabs button,.auth-text-button,.auth-secondary-actions button,.hero-carousel-controls button,.gallery-filters button,.news-filters button,.signature-options button,.signature-clear{min-height:44px}.hero-carousel-controls button{min-width:44px;justify-content:center}.review-action{display:inline-flex;min-height:44px;align-items:center;justify-content:center}.admin-panel .review-row{align-items:flex-start;flex-direction:column}.admin-panel .review-row>span{width:100%;min-width:0}.admin-panel .review-row strong,.admin-panel .review-row small{overflow-wrap:anywhere}.admin-panel .review-actions{width:100%;flex-wrap:wrap}.gallery-form,.gallery-form>*,.achievement-image-field,.signature-input{min-width:0;max-width:100%}.gallery-form input[type=file],.signature-input input[type=file]{width:100%;max-width:100%}}
+@media(max-width:760px){.application-field-pair{grid-template-columns:1fr}}
 @media(max-width:700px){.application-wing-options{grid-template-columns:repeat(2,minmax(0,1fr))}.application-wing-options label{min-height:62px;padding:11px 12px}}
 @media(max-width:420px){.application-wing-options{grid-template-columns:1fr}}
 

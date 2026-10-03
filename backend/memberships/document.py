@@ -229,14 +229,27 @@ def build_official_pdf(membership):
     submitted_on = timezone.localtime(membership.submitted_at).strftime('%d/%m/%Y') if membership.submitted_at else ''
     guardian_type = membership.get_guardian_type_display() if hasattr(membership, 'get_guardian_type_display') else ''
     guardian_name = membership.parent_or_guardian or membership.emergency_contact_name
-    guardian_details = ' / '.join(filter(None, [guardian_type, guardian_name, membership.emergency_contact_phone]))
+    separated_guardian_phone = getattr(membership, 'guardian_contact_phone', '')
+    guardian_phone = separated_guardian_phone or membership.emergency_contact_phone
+    guardian_details = ' / '.join(filter(None, [guardian_type, guardian_phone]))
+    # Legacy applications used emergency_contact_phone for the guardian's
+    # number. Without the additive guardian field, a distinct emergency
+    # contact cannot be inferred reliably, so avoid presenting legacy guardian
+    # data as emergency information.
+    emergency_details = ''
+    if separated_guardian_phone:
+        emergency_details = ' / '.join(filter(None, [
+            membership.emergency_contact_name,
+            membership.emergency_contact_relationship,
+            membership.emergency_contact_phone,
+        ]))
     fields = [
         ('Name of Applicant (In Block letters)', _membership_applicant_name(membership)),
-        ('Father’s / Mother’s / Guardian’s Name', membership.parent_or_guardian),
+        ('Father’s / Mother’s / Guardian’s Name', guardian_name),
         ('Date of Birth', membership.date_of_birth.strftime('%d/%m/%Y')),
         ('Residential Address', membership.address),
         ('Contact Number(s)', membership.contact_phone or membership.user.phone),
-        ('Relationship / Name / Phone No.', guardian_details),
+        ('Parent/Guardian Type / Contact', guardian_details),
         ('PIN / Postal Code', membership.postal_code),
         ('E-mail Id', membership.user.email),
         ('Name of School/College', membership.school_college),
@@ -245,7 +258,7 @@ def build_official_pdf(membership):
         ('Introduced By', membership.introduced_by),
         ('Section / Wing', membership.get_member_type_display()),
         ('Gender', membership.gender),
-        ('Emergency relationship', membership.emergency_contact_relationship),
+        ('Emergency Name / Relationship / Contact', emergency_details),
         ('Previous Scout / Guide experience', membership.previous_experience),
         ('Joining Date', membership.joining_date.strftime('%d/%m/%Y') if membership.joining_date else ''),
         ('Date', submitted_on),

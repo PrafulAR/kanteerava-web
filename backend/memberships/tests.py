@@ -40,7 +40,7 @@ def sample_membership(**overrides):
         applicant_name='OFFICIAL APPLICANT NAME',
         parent_or_guardian='Example Guardian', date_of_birth=date(2004, 10, 13),
         address='Chamrajpet, Bengaluru', contact_phone='9000000000', emergency_contact_name='Example Guardian',
-        emergency_contact_phone='9000000001', postal_code='560018', school_college='', grade_section='',
+        guardian_contact_phone='9000000001', emergency_contact_phone='9000000002', postal_code='560018', school_college='', grade_section='',
         hobbies='', introduced_by='', gender='', emergency_contact_relationship='', preferred_patrol='',
         previous_experience='', joining_date=None, submitted_at=timezone.now(), approved_at=timezone.now(),
         applicant_signature=signature_bytes(), admin_signature=signature_bytes(), guardian_signature=signature_bytes(),
@@ -228,9 +228,10 @@ class MembershipApplicationValidationTests(SimpleTestCase):
             'address': 'Chamrajpet, Bengaluru',
             'contact_phone': '9000000002',
             'parent_or_guardian': 'Example Guardian',
-            'emergency_contact_name': 'Example Guardian',
-            'emergency_contact_phone': '9000000001',
-            'emergency_contact_relationship': 'Parent',
+            'guardian_contact_phone': '9000000001',
+            'emergency_contact_name': 'Emergency Person',
+            'emergency_contact_phone': '9000000003',
+            'emergency_contact_relationship': 'Sibling',
             'guardian_type': Membership.GuardianType.FATHER,
             'postal_code': '560018',
             'gender': 'Male',
@@ -247,7 +248,7 @@ class MembershipApplicationValidationTests(SimpleTestCase):
         }
 
     def test_visible_required_fields_are_enforced_by_api_serializer(self):
-        for field in ('applicant_name', 'parent_or_guardian', 'guardian_type', 'contact_phone', 'postal_code', 'gender', 'school_college', 'grade_section', 'joining_date', 'applicant_signature_upload', 'guardian_signature_upload', 'photo_upload'):
+        for field in ('applicant_name', 'parent_or_guardian', 'guardian_type', 'guardian_contact_phone', 'emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_phone', 'contact_phone', 'postal_code', 'gender', 'school_college', 'grade_section', 'joining_date', 'applicant_signature_upload', 'guardian_signature_upload', 'photo_upload'):
             payload = self.valid_payload()
             payload[field] = ''
             serializer = MembershipSerializer(data=payload)
@@ -286,7 +287,7 @@ class MembershipApplicationValidationTests(SimpleTestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn('date_of_birth', serializer.errors)
 
-        for field in ('contact_phone', 'emergency_contact_phone'):
+        for field in ('contact_phone', 'guardian_contact_phone', 'emergency_contact_phone'):
             payload = self.valid_payload()
             payload[field] = 'not-a-phone'
             serializer = MembershipSerializer(data=payload)
@@ -417,8 +418,9 @@ class MembershipWorkflowIntegrationTests(TestCase):
             'member_type': Membership.MemberType.SCOUT, 'date_of_birth': date(2004, 10, 13),
             'address': 'A long but ordinary Bengaluru address', 'parent_or_guardian': 'Example Guardian',
             'contact_phone': '9000000002',
-            'emergency_contact_name': 'Example Guardian', 'emergency_contact_phone': '9000000000',
-            'emergency_contact_relationship': 'Parent',
+            'guardian_contact_phone': '9000000000',
+            'emergency_contact_name': 'Emergency Person', 'emergency_contact_phone': '9000000003',
+            'emergency_contact_relationship': 'Sibling',
             'guardian_type': Membership.GuardianType.FATHER,
             'postal_code': '560018', 'gender': 'Male', 'school_college': 'Example School',
             'grade_section': '10 A', 'joining_date': date(2026, 9, 21),
@@ -530,9 +532,10 @@ class MembershipWorkflowIntegrationTests(TestCase):
                 'address': 'Chamrajpet, Bengaluru',
                 'contact_phone': '9000000002',
                 'parent_or_guardian': 'Example Guardian',
-                'emergency_contact_name': 'Example Guardian',
-                'emergency_contact_phone': '9000000001',
-                'emergency_contact_relationship': 'Parent',
+                'guardian_contact_phone': '9000000001',
+                'emergency_contact_name': 'Emergency Person',
+                'emergency_contact_phone': '9000000003',
+                'emergency_contact_relationship': 'Sibling',
                 'guardian_type': Membership.GuardianType.FATHER,
                 'postal_code': '560018',
                 'gender': 'Male',
