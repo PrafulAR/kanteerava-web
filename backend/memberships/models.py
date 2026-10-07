@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django_mongodb_backend.fields import ObjectIdAutoField
+from django_mongodb_backend.managers import MongoManager
 
 
 class Membership(models.Model):
@@ -24,6 +25,8 @@ class Membership(models.Model):
         PENDING = 'PENDING', 'Pending'
         APPROVED = 'APPROVED', 'Approved'
         REJECTED = 'REJECTED', 'Rejected'
+
+    objects = MongoManager()
 
     id = ObjectIdAutoField(primary_key=True)
     application_id = models.CharField(max_length=40, unique=True, blank=True)
@@ -66,6 +69,9 @@ class Membership(models.Model):
 
     class Meta:
         ordering = ['-submitted_at']
+        indexes = [
+            models.Index(fields=['-submitted_at'], name='membership_submitted_desc_idx'),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=['user'],

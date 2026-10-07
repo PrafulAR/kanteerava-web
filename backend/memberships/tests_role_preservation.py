@@ -1,7 +1,7 @@
 """Regression tests for account roles across the membership API workflow."""
 
 import base64
-from datetime import date
+from datetime import date, timedelta
 from io import BytesIO
 from unittest.mock import patch
 
@@ -263,3 +263,31 @@ class MembershipRoleApiWorkflowTests(TestCase):
         self.assertEqual(own_response.data['data'][0]['id'], str(own_membership.pk))
         self.assertEqual(own_response.data['data'][0]['member_type'], Membership.MemberType.LEADER)
         self.assertEqual(own_response.data['data'][0]['status'], Membership.Status.APPROVED)
+
+    def test_admin_global_membership_list_is_ordered_newest_submission_first(self):
+        older_user = User.objects.create_user(
+            email='older-membership@test.invalid',
+            password='testpass123',
+            full_name='Older Member',
+        )
+        newer_user = User.objects.create_user(
+            email='newer-membership@test.invalid',
+            password='testpass123',
+            full_name='Newer Member',
+        )
+        older_membership = self.submit(older_user, Membership.MemberType.SCOUT)
+        newer_membership = self.submit(newer_user, Membership.MemberType.ROVER)
+        Membership.objects.filter(pk=older_membership.pk).update(
+            submitted_at=timezone.now() - timedelta(days=1),
+        )
+        Membership.objects.filter(pk=newer_membership.pk).update(
+            submitted_at=timezone.now(),
+        )
+
+        response = self.client_for(self.reviewer).get('/api/memberships/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            [item['id'] for item in response.data['data']],
+            [str(newer_membership.pk), str(older_membership.pk)],
+        )

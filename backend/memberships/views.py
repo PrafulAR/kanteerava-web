@@ -126,7 +126,13 @@ class MembershipListView(APIView):
         if request.query_params.get('mine') == '1':
             memberships = Membership.objects.filter(user=request.user)
         elif is_admin(request.user):
-            memberships = Membership.objects.all()
+            # The regular MongoDB ORM query inserts an identity $addFields
+            # stage before $sort, which prevents MongoDB from using the
+            # submitted_at index. Keep $sort first for the unbounded admin
+            # list so the descending index supplies the requested ordering.
+            memberships = Membership.objects.raw_aggregate([
+                {'$sort': {'submitted_at': -1}},
+            ])
         else:
             memberships = Membership.objects.filter(user=request.user)
         return Response({'success': True, 'message': 'Memberships loaded.', 'data': MembershipSerializer(memberships, many=True).data})
