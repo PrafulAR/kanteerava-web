@@ -164,6 +164,34 @@ REST_FRAMEWORK = {
     },
 }
 
+# Render captures process stdout/stderr. Django attaches exception information
+# to unhandled request errors, so this handler makes production tracebacks
+# observable without logging request bodies, headers, cookies, or credentials.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'request_error': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'request_error_console': {
+            'class': 'logging.StreamHandler',
+            'level': 'ERROR',
+            'formatter': 'request_error',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['request_error_console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+
 AUTH_USER_MODEL = 'accounts.User'
 AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend']
 
