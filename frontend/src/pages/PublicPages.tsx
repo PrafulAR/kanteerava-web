@@ -14,6 +14,8 @@ import wosmLogo from '../assets/wosm-logo.png'
 import rashtrapatiMain from '../assets/Untitled Design (2).png'
 import rashtrapatiSecond from '../assets/Untitled Design (3).png'
 import rashtrapatiThird from '../assets/Untitled Design (4).png'
+import { HistoricalPhotoCarousel } from '../components/about/HistoricalPhotoCarousel'
+import { historicalPhotos } from '../components/about/historicalPhotos'
 import { ScoutingJourney } from '../components/public/ScoutingJourney'
 import { SOCIAL_LINKS } from '../config/socialLinks'
 
@@ -92,6 +94,7 @@ function InfoTerm({ children, description }: { children: ReactNode; description:
 export function AboutPage() {
   return <>
     <section className="page-intro"><p className="kicker">Who we are</p><h1>A legacy of<br/><em>service since 1946.</em></h1><p>Kanteerava is one of Karnataka&apos;s enduring Scouting and Guiding communities.</p></section>
+    <HistoricalPhotoCarousel photos={historicalPhotos}/>
     <section className="identity-story page-section">
       <div className="identity-story-heading"><p className="kicker">Our story</p><h2>Generations shaped<br/>by <em>purpose.</em></h2></div>
       <div className="identity-copy"><p><strong>XV Kanteerava Scout Troop</strong> has been a proud part of the Scouting movement since <strong>1946</strong>. Founded by Scout Masters Mr. Sriram , Mr. D S Siddaiah and Mr. Ananthaiah, the group has grown through generations while carrying forward the values, traditions, and spirit of Scouting.</p><p>Over the years, Kanteerava has grown into a strong and active Scouting and Guiding community through the dedication of our leaders and members. We believe in developing discipline, leadership, teamwork, service, and responsibility among young people.</p></div>
