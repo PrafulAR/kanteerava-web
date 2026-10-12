@@ -24,9 +24,9 @@ export const historicalPhotos: readonly HistoricalPhoto[] = [
   {
     id: 'first-hike-camp-1965',
     src: firstHikeCamp,
-    alt: 'Kanteerava Group members at their first hike-cum-camp at Dr. Besant Park',
+    alt: 'Kanteerava Group members at their first hike-cum-camp at Dr. Annie Besant Park',
     caption:
-      "The Kanteerava Group's first hike-cum-camp at Dr. Besant Park, State Training Centre, Doddaballapura.",
+      "The Kanteerava Group's first hike-cum-camp at Dr. Annie Besant Park, State Training Centre, Doddaballapura.",
     year: '1965',
   },
   {
