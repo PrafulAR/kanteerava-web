@@ -15,8 +15,8 @@
   text-transform: uppercase;
 }
 
-.bsg-story .bsg-purpose p {
-  margin: 11px 0 0;
+.bsg-story > .bsg-story-copy .bsg-purpose p {
+  margin: 20px 0 0;
   color: #354e60;
   font: 17px/1.66 Georgia, serif;
 }
@@ -207,7 +207,7 @@
     padding: 21px 20px;
   }
 
-  .bsg-story .bsg-purpose p {
+  .bsg-story > .bsg-story-copy .bsg-purpose p {
     font-size: 16px;
   }
 
