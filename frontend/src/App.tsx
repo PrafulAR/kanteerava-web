@@ -198,10 +198,11 @@ function App() {
 
   const rejectApplication = async (id: string, reason: string) => {
     try {
-      await rejectMembership(id, reason)
-      setAdminApplications((current) => current.filter((item) => item.id !== id))
+      const response = await rejectMembership(id, reason)
+      setAdminApplications((current) => current.map((item) => item.id === id ? response.data.data : item))
       setAdminSummary((current) => current ? { ...current, pending_applications: current.pending_applications - 1 } : current)
       await refreshMembership().catch(() => setMembership(null))
+      return response.data.data
     } catch (error) {
       setMessage(authErrorMessage(error))
       throw error

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import AdminDashboardView, DirectoryMemberDetailView, MemberDirectoryView, MembershipApplyView, MembershipDetailView, MembershipListView, MembershipRejectView, MembershipApproveView, MembershipPdfView, MembershipResourcesView, WingMemberListView
+from .views import AdminDashboardView, DirectoryMemberDetailView, MemberDirectoryView, MembershipApplyView, MembershipDetailView, MembershipListView, MembershipPrivateImageView, MembershipRejectView, MembershipApproveView, MembershipPdfView, MembershipResourcesView, WingMemberListView
 
 urlpatterns = [
     path('admin-dashboard/', AdminDashboardView.as_view(), name='admin-dashboard'),
@@ -14,4 +14,5 @@ urlpatterns = [
     path('<str:membership_id>/approve/', MembershipApproveView.as_view(), name='membership-approve'),
     path('<str:membership_id>/reject/', MembershipRejectView.as_view(), name='membership-reject'),
     path('<str:membership_id>/pdf/', MembershipPdfView.as_view(), name='membership-pdf'),
+    path('<str:membership_id>/private-image/<str:image_kind>/', MembershipPrivateImageView.as_view(), name='membership-private-image'),
 ]

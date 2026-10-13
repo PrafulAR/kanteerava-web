@@ -218,6 +218,33 @@ class MembershipPdfView(APIView):
         return response
 
 
+class MembershipPrivateImageView(APIView):
+    permission_classes = [IsAuthenticated]
+    image_fields = {
+        'photo': ('member_photo', 'image/jpeg'),
+        'applicant-signature': ('applicant_signature', 'image/png'),
+    }
+
+    def get(self, request, membership_id, image_kind):
+        if not is_admin(request.user):
+            return Response({'success': False, 'message': 'Admin permission required.', 'errors': {}}, status=status.HTTP_403_FORBIDDEN)
+        membership = get_object_or_none(Membership, pk=membership_id)
+        if membership is None:
+            return Response({'success': False, 'message': 'Membership not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        image_field = self.image_fields.get(image_kind)
+        if image_field is None:
+            return Response({'success': False, 'message': 'Membership image not found.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        field_name, content_type = image_field
+        image = getattr(membership, field_name, None)
+        if not image:
+            return Response({'success': False, 'message': 'Membership image not provided.', 'errors': {}}, status=status.HTTP_404_NOT_FOUND)
+        response = HttpResponse(bytes(image), content_type=content_type)
+        response['Cache-Control'] = 'private, no-store'
+        response['Content-Disposition'] = 'inline'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+
 class MembershipApproveView(APIView):
     permission_classes = [IsAuthenticated]
 

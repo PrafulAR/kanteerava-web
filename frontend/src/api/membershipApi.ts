@@ -12,6 +12,7 @@ export interface Membership {
   applicant_name: string
   member_id: string
   pdf_available: boolean
+  member_photo_available: boolean
   applicant_signature_available: boolean
   guardian_signature_available: boolean
   member_type: MemberType
@@ -73,6 +74,7 @@ export const rejectMembership = (id: string, rejection_reason: string) => apiCli
 export const updateMembership = (id: string, payload: Partial<Membership>) => apiClient.patch<{ data: Membership }>(`/memberships/${id}/`, payload)
 export const deleteMembership = (id: string) => apiClient.delete<{ data: Record<string, never> }>(`/memberships/${id}/`)
 export const getMembershipPdf = (id: string, download = false) => apiClient.get<Blob>(`/memberships/${id}/pdf/`, { responseType: 'blob', params: download ? { download: 1 } : undefined })
+export const getMembershipPrivateImage = (id: string, kind: 'photo' | 'applicant-signature') => apiClient.get<Blob>(`/memberships/${id}/private-image/${kind}/`, { responseType: 'blob' })
 export const getMemberDirectory = () => apiClient.get<{ data: { counts: Record<MemberType, number> } }>('/memberships/directory/')
 export const getWingMembers = (wing: MemberType, search = '') => apiClient.get<{ data: Membership[] }>(`/memberships/directory/${wing}/`, { params: search ? { search } : undefined })
 export const getDirectoryMember = (wing: MemberType, id: string) => apiClient.get<{ data: Membership }>(`/memberships/directory/${wing}/${id}/`)

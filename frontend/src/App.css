@@ -702,6 +702,17 @@ input::placeholder,textarea::placeholder { color: #647785; opacity: 1; }
 .pending-signature-block { margin: 18px 0; }
 .pending-signature-block h3 { margin: 0 0 10px; color: #172635; font: 600 14px 'IBM Plex Mono',monospace; }
 .membership-review-status { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; font-size: 14px; color: #496171; }
+.application-private-media { margin: 28px 0 10px; padding: 25px 0 8px; border-top: 1px solid #d7d6cc; }
+.application-private-media > h4 { margin: 0 0 18px; color: #172635; font: 400 25px/1.1 Georgia,serif; }
+.application-private-media-grid { display: grid; grid-template-columns: minmax(170px,.72fr) minmax(280px,1.28fr); gap: 16px; }
+.application-private-media-item { min-width: 0; margin: 0; }
+.application-private-media-item figcaption { margin-bottom: 9px; color: #526674; font: 600 11px/1.4 'IBM Plex Mono',monospace; letter-spacing: .08em; text-transform: uppercase; }
+.application-private-media-frame { display: grid; min-width: 0; place-items: center; box-sizing: border-box; padding: 14px; border: 1px solid #d7d6cc; border-radius: 6px; background: #fffefa; }
+.application-private-media-photo .application-private-media-frame { min-height: 220px; }
+.application-private-media-signature .application-private-media-frame { min-height: 160px; }
+.application-private-media-photo img { display: block; width: auto; max-width: 100%; height: auto; max-height: 220px; object-fit: contain; }
+.application-private-media-signature img { display: block; width: min(100%,420px); height: auto; max-height: 135px; object-fit: contain; }
+.application-private-media-placeholder { color: #718087; font: 14px/1.45 Georgia,serif; }
 .approval-modal-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; background: rgba(23,38,53,.68); }
 .approval-modal { width: min(100%,600px); max-height: calc(100vh - 32px); overflow-y: auto; padding: clamp(22px,4vw,38px); border-radius: 8px; background: #fffefa; box-shadow: 0 18px 56px rgba(0,0,0,.2); }
 .approval-modal h2 { margin: 8px 0 14px; color: #172635; font: 400 clamp(29px,4vw,40px) Georgia,serif; }
@@ -720,6 +731,7 @@ input::placeholder,textarea::placeholder { color: #647785; opacity: 1; }
 .deletion-target strong { color: #172635; font: 20px Georgia,serif; }
 .deletion-target span { color: #8b2c20; font: 600 11px 'IBM Plex Mono',monospace; overflow-wrap: anywhere; }
 @media(max-width:700px){.required-fields-note,.application-wing-helper,.application-field-wide,.application-upload-field,.application-signature-field{grid-column:auto}.application-wing-helper a{font-size:12px}.approval-modal-backdrop{grid-template-columns:minmax(0,1fr)}.approval-modal{box-sizing:border-box;width:100%;min-width:0;max-width:100%}.approval-modal .review-actions{flex-direction:column}.approval-modal .review-actions>*{width:100%}.application-review{min-width:0}.review-header{align-items:flex-start;flex-direction:column;gap:12px}.review-header h3{max-width:100%;overflow-wrap:anywhere}.review-fields{grid-template-columns:1fr}.review-fields,.review-fields>*,.review-fields input,.review-fields select,.review-fields textarea{min-width:0;max-width:100%}.auth-tabs button,.auth-text-button,.auth-secondary-actions button,.hero-carousel-controls button,.gallery-filters button,.news-filters button,.signature-options button,.signature-clear{min-height:44px}.hero-carousel-controls button{min-width:44px;justify-content:center}.review-action{display:inline-flex;min-height:44px;align-items:center;justify-content:center}.admin-panel .review-row{align-items:flex-start;flex-direction:column}.admin-panel .review-row>span{width:100%;min-width:0}.admin-panel .review-row strong,.admin-panel .review-row small{overflow-wrap:anywhere}.admin-panel .review-actions{width:100%;flex-wrap:wrap}.gallery-form,.gallery-form>*,.achievement-image-field,.signature-input{min-width:0;max-width:100%}.gallery-form input[type=file],.signature-input input[type=file]{width:100%;max-width:100%}}
+@media(max-width:700px){.application-private-media-grid{grid-template-columns:1fr}.application-private-media-photo .application-private-media-frame{min-height:205px}.application-private-media-signature .application-private-media-frame{min-height:145px}.application-private-media-photo img{max-height:205px}.application-private-media-signature img{max-height:120px}}
 @media(max-width:760px){.application-field-pair{grid-template-columns:1fr}}
 @media(max-width:700px){.application-wing-options{grid-template-columns:repeat(2,minmax(0,1fr))}.application-wing-options label{min-height:62px;padding:11px 12px}}
 @media(max-width:420px){.application-wing-options{grid-template-columns:1fr}}

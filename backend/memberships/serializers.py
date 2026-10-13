@@ -17,6 +17,7 @@ class MembershipSerializer(serializers.ModelSerializer):
     }
     id = serializers.CharField(source='pk', read_only=True)
     pdf_available = serializers.SerializerMethodField()
+    member_photo_available = serializers.SerializerMethodField()
     applicant_signature_available = serializers.SerializerMethodField()
     guardian_signature_available = serializers.SerializerMethodField()
     user_name = serializers.SerializerMethodField()
@@ -34,11 +35,14 @@ class MembershipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Membership
-        fields = ['id', 'application_id', 'member_id', 'pdf_available', 'applicant_signature_available', 'guardian_signature_available', 'user_name', 'user_email', 'user_phone', 'applicant_name', 'member_type', 'status', 'scout_id', 'date_of_birth', 'gender', 'address', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'parent_or_guardian', 'guardian_type', 'guardian_contact_phone', 'contact_phone', 'postal_code', 'school_college', 'grade_section', 'hobbies', 'introduced_by', 'previous_experience', 'joining_date', 'rejection_reason', 'submitted_at', 'approved_at', 'fee_acknowledged', 'applicant_signature_upload', 'applicant_signature_name', 'guardian_signature_upload', 'guardian_signature_name', 'photo_upload', 'photo_name']
-        read_only_fields = ['id', 'application_id', 'member_id', 'pdf_available', 'applicant_signature_available', 'guardian_signature_available', 'user_name', 'user_email', 'user_phone', 'status', 'scout_id', 'rejection_reason', 'submitted_at', 'approved_at']
+        fields = ['id', 'application_id', 'member_id', 'pdf_available', 'member_photo_available', 'applicant_signature_available', 'guardian_signature_available', 'user_name', 'user_email', 'user_phone', 'applicant_name', 'member_type', 'status', 'scout_id', 'date_of_birth', 'gender', 'address', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'parent_or_guardian', 'guardian_type', 'guardian_contact_phone', 'contact_phone', 'postal_code', 'school_college', 'grade_section', 'hobbies', 'introduced_by', 'previous_experience', 'joining_date', 'rejection_reason', 'submitted_at', 'approved_at', 'fee_acknowledged', 'applicant_signature_upload', 'applicant_signature_name', 'guardian_signature_upload', 'guardian_signature_name', 'photo_upload', 'photo_name']
+        read_only_fields = ['id', 'application_id', 'member_id', 'pdf_available', 'member_photo_available', 'applicant_signature_available', 'guardian_signature_available', 'user_name', 'user_email', 'user_phone', 'status', 'scout_id', 'rejection_reason', 'submitted_at', 'approved_at']
 
     def get_pdf_available(self, obj):
         return obj.status == Membership.Status.APPROVED and obj.official_form_version == 1 and bool(obj.application_pdf)
+
+    def get_member_photo_available(self, obj):
+        return bool(obj.member_photo)
 
     def get_applicant_signature_available(self, obj):
         return bool(obj.applicant_signature)

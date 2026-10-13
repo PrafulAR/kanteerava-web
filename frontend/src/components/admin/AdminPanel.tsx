@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { isAxiosError } from 'axios'
 import { Link } from 'react-router-dom'
-import type { AdminSummary, Membership } from '../../api/membershipApi'
+import { getMembershipPrivateImage, type AdminSummary, type Membership } from '../../api/membershipApi'
 import { isLeaderOrLifeMember, WINGS, wingLabel } from '../../config/wings'
 import { GENDERS, GUARDIAN_TYPES } from '../../config/membership'
 import { formatDate } from '../../utils/date'
@@ -12,7 +12,7 @@ interface AdminPanelProps {
   message: string
   applications: Membership[]
   onApprove: (id: string, signature: SignaturePayload) => Promise<Membership>
-  onReject: (id: string, reason: string) => Promise<void>
+  onReject: (id: string, reason: string) => Promise<Membership>
   onUpdate: (id: string, payload: Partial<Membership>) => Promise<Membership | void>
   onDelete: (id: string) => Promise<void>
   onView: (id: string) => void
@@ -28,6 +28,44 @@ const workspaces = [
   { title: 'Events', description: 'Create, publish and manage upcoming and past events.', action: 'Open events', to: '/admin/events' },
   { title: 'Newsroom', description: 'Create and manage notices, updates, reports and stories.', action: 'Open newsroom', to: '/admin/newsroom' },
 ] as const
+
+interface MembershipPrivateImageProps {
+  membershipId: string
+  kind: 'photo' | 'applicant-signature'
+  available: boolean
+  alt: string
+}
+
+function MembershipPrivateImage({ membershipId, kind, available, alt }: MembershipPrivateImageProps) {
+  const [source, setSource] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!available) return
+
+    let active = true
+    let objectUrl = ''
+    getMembershipPrivateImage(membershipId, kind)
+      .then((response) => {
+        objectUrl = URL.createObjectURL(response.data)
+        if (active) setSource(objectUrl)
+        else URL.revokeObjectURL(objectUrl)
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
+
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [available, kind, membershipId])
+
+  if (!available) return <span className="application-private-media-placeholder">Not provided</span>
+  if (failed) return <span className="application-private-media-placeholder">Unable to load</span>
+  if (!source) return <span className="application-private-media-placeholder">Loading…</span>
+  return <img src={source} alt={alt} />
+}
 
 export function AdminPanel({ summary, message, applications, onApprove, onReject, onUpdate, onDelete, onView, onDownload, view = 'overview' }: AdminPanelProps) {
   const [selected, setSelected] = useState<Membership | null>(null)
@@ -94,7 +132,7 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
     }
   }, [approvalOpen, approving, deleting, deletionOpen])
 
-  const visibleApplications = applications.filter((application) => application.status !== 'REJECTED')
+  const visibleApplications = applications
   const normalizedSearch = applicationSearch.trim().toLocaleLowerCase()
   const filteredApplications = normalizedSearch
     ? visibleApplications.filter((application) => [
@@ -162,8 +200,10 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
     setRejecting(true)
     setRejectionError('')
     try {
-      await onReject(selected.id, rejectionReason)
-      setSelected(null)
+      const updated = await onReject(selected.id, rejectionReason)
+      setSelected(updated)
+      setDraft(updated)
+      setRejectionReason('')
     } catch (error) {
       setRejectionError(isAxiosError(error) && typeof error.response?.data?.message === 'string' ? error.response.data.message : 'This application could not be rejected. Please try again.')
     } finally {
@@ -248,6 +288,23 @@ export function AdminPanel({ summary, message, applications, onApprove, onReject
         <label>Joining Date<input disabled={selected.status !== 'PENDING'} type="date" value={draft.joining_date ?? selected.joining_date ?? ''} onChange={(event) => update('joining_date', event.target.value)} /></label>
         <label>Previous Scout or Guide Experience<textarea disabled={selected.status !== 'PENDING'} value={draft.previous_experience ?? selected.previous_experience} onChange={(event) => update('previous_experience', event.target.value)} /></label>
       </div>
+      <section className="application-private-media" aria-labelledby={`application-private-media-${selected.id}`}>
+        <h4 id={`application-private-media-${selected.id}`}>Applicant Photo &amp; Signature</h4>
+        <div className="application-private-media-grid">
+          <figure className="application-private-media-item application-private-media-photo">
+            <figcaption>Passport-size Photograph</figcaption>
+            <div className="application-private-media-frame">
+              <MembershipPrivateImage key={`${selected.id}-photo`} membershipId={selected.id} kind="photo" available={selected.member_photo_available} alt={`Passport-size photograph of ${selected.applicant_name || selected.user_name}`} />
+            </div>
+          </figure>
+          <figure className="application-private-media-item application-private-media-signature">
+            <figcaption>Applicant Signature</figcaption>
+            <div className="application-private-media-frame">
+              <MembershipPrivateImage key={`${selected.id}-applicant-signature`} membershipId={selected.id} kind="applicant-signature" available={selected.applicant_signature_available} alt={`Applicant signature of ${selected.applicant_name || selected.user_name}`} />
+            </div>
+          </figure>
+        </div>
+      </section>
       {selected.status === 'PENDING' && <textarea className="rejection-reason" placeholder="Rejection reason (optional)" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />}
       {rejectionError && <p className="signature-error" role="alert">{rejectionError}</p>}
       <div className="review-actions">

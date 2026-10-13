@@ -16,7 +16,7 @@ from .models import Membership, RetiredApplicationNumber
 from .serializers import MembershipSerializer
 from .uploads import normalize_image_upload
 from .services import MembershipService
-from .views import MembershipDetailView, MembershipPdfView, MembershipRejectView, MembershipResourcesView
+from .views import MembershipDetailView, MembershipPdfView, MembershipPrivateImageView, MembershipRejectView, MembershipResourcesView
 from rest_framework.test import APIRequestFactory, force_authenticate
 from accounts.models import User
 
@@ -217,6 +217,81 @@ class PrivateImageValidationTests(SimpleTestCase):
         encoded = base64.b64encode(output.getvalue()).decode('ascii')
         with self.assertRaisesRegex(ValueError, 'wider than they are tall'):
             normalize_image_upload(f'data:image/jpeg;base64,{encoded}', 'portrait.jpg', kind='signature')
+
+
+class MembershipPrivateImageViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.admin = SimpleNamespace(is_authenticated=True, is_superuser=False, role=User.Role.ADMIN)
+        self.member = SimpleNamespace(
+            status=Membership.Status.PENDING,
+            member_photo=photo_bytes(),
+            applicant_signature=signature_bytes(),
+        )
+
+    def get_image(self, image_kind, *, user=None, member=None):
+        request = self.factory.get(f'/memberships/test-id/private-image/{image_kind}/')
+        force_authenticate(request, user=user or self.admin)
+        with patch('memberships.views.Membership.objects.get', return_value=member or self.member):
+            return MembershipPrivateImageView.as_view()(
+                request,
+                membership_id='test-id',
+                image_kind=image_kind,
+            )
+
+    def test_admin_can_view_photo_for_every_application_status(self):
+        for membership_status in Membership.Status.values:
+            with self.subTest(status=membership_status):
+                self.member.status = membership_status
+                response = self.get_image('photo')
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.content, self.member.member_photo)
+                self.assertEqual(response['Content-Type'], 'image/jpeg')
+                self.assertEqual(response['Cache-Control'], 'private, no-store')
+                self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+
+    def test_admin_can_view_drawn_and_uploaded_applicant_signatures(self):
+        jpeg_output = BytesIO()
+        Image.new('RGB', (400, 100), 'white').save(jpeg_output, 'JPEG')
+        signatures = (
+            normalize_image_upload(
+                f'data:image/png;base64,{base64.b64encode(signature_bytes()).decode("ascii")}',
+                'drawn-signature.png',
+                kind='signature',
+            ),
+            normalize_image_upload(
+                f'data:image/jpeg;base64,{base64.b64encode(jpeg_output.getvalue()).decode("ascii")}',
+                'uploaded-signature.jpg',
+                kind='signature',
+            ),
+        )
+        for signature in signatures:
+            with self.subTest(source=signature[:8]):
+                self.member.applicant_signature = signature
+                response = self.get_image('applicant-signature')
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.content, signature)
+                self.assertEqual(response['Content-Type'], 'image/png')
+
+    def test_missing_private_images_return_not_provided(self):
+        member = SimpleNamespace(member_photo=None, applicant_signature=None)
+        for image_kind in ('photo', 'applicant-signature'):
+            with self.subTest(image_kind=image_kind):
+                response = self.get_image(image_kind, member=member)
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.data['message'], 'Membership image not provided.')
+
+    def test_non_admin_cannot_view_private_membership_images(self):
+        normal_user = SimpleNamespace(is_authenticated=True, is_superuser=False, role=User.Role.USER)
+        response = self.get_image('photo', user=normal_user)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data['message'], 'Admin permission required.')
+
+    def test_serializer_reports_member_photo_availability_without_exposing_bytes(self):
+        serializer = MembershipSerializer()
+        self.assertTrue(serializer.get_member_photo_available(self.member))
+        self.assertFalse(serializer.get_member_photo_available(SimpleNamespace(member_photo=None)))
+        self.assertNotIn('member_photo', serializer.fields)
 
 
 class MembershipApplicationValidationTests(SimpleTestCase):
